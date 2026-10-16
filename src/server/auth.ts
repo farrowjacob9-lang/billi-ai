@@ -13,8 +13,26 @@ export const SESSION_DAYS = 30;
 const FAILED_LOGIN_LIMIT = 5, FAILED_LOGIN_WINDOW_MINUTES = 15;
 const SCRYPT = { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 
-const derive = (password: string, salt: Buffer, options: ScryptOptions) => new Promise<Buffer>((resolve, reject) =>
-  scrypt(password.normalize("NFKC"), salt, 32, options, (error, key) => error ? reject(error) : resolve(key)));
+// scrypt runs on libuv's small thread pool, shared with DNS and file access. Cap how many run at
+// once and how many may wait, so a burst of sign-ins can't stall every other request.
+const HASH_CONCURRENCY = 2, HASH_QUEUE_LIMIT = 32;
+let hashing = 0;
+const waiting: (() => void)[] = [];
+
+async function derive(password: string, salt: Buffer, options: ScryptOptions): Promise<Buffer> {
+  if (hashing >= HASH_CONCURRENCY) {
+    if (waiting.length >= HASH_QUEUE_LIMIT) throw new AuthError("rate_limited", "Billions is busy right now. Try again in a moment.");
+    await new Promise<void>(resolve => waiting.push(resolve));
+  }
+  hashing++;
+  try {
+    return await new Promise<Buffer>((resolve, reject) =>
+      scrypt(password.normalize("NFKC"), salt, 32, options, (error, key) => error ? reject(error) : resolve(key)));
+  } finally {
+    hashing--;
+    waiting.shift()?.();
+  }
+}
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16);
@@ -75,17 +93,26 @@ export async function logIn(input: { email: unknown; password: unknown }) {
   const email = normalizeEmail(input.email);
   const password = typeof input.password === "string" ? input.password.slice(0, 200) : "";
   if (!email || !password) throw new AuthError("invalid_input", "Enter your email and password.");
-  const failures = (await query<{ n: number }>(`SELECT count(*)::int AS n FROM login_attempts WHERE email = $1 AND NOT succeeded AND attempted_at > now() - make_interval(mins => $2)`, [email, FAILED_LOGIN_WINDOW_MINUTES])).rows[0].n;
-  if (failures >= FAILED_LOGIN_LIMIT) throw new AuthError("rate_limited", "Too many attempts. Wait 15 minutes, then try again.");
+  const unknownEmailHash = dummyHash ??= hashPassword("not-a-real-password");
 
-  // A user's first business is their workspace until business switching exists.
-  const row = (await query<{ id: string; password_hash: string; business_id: string; business_name: string }>(
-    `SELECT u.id, u.password_hash, b.id AS business_id, b.name AS business_name FROM users u
-     JOIN memberships m ON m.user_id = u.id JOIN businesses b ON b.id = m.business_id
-     WHERE u.email = $1 ORDER BY m.created_at LIMIT 1`, [email])).rows[0];
-  const ok = row ? await verifyPassword(password, row.password_hash) : await verifyPassword(password, await (dummyHash ??= hashPassword("not-a-real-password")));
-  await query("INSERT INTO login_attempts (email, succeeded) VALUES ($1, $2)", [email, ok && !!row]);
-  if (!ok || !row) throw new AuthError("invalid_credentials", "That email and password don’t match an account.");
+  // The per-email lock makes count → verify → record one step, so parallel guesses can't all
+  // read a count under the limit.
+  const result = await transaction(async client => {
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`login:${email}`]);
+    const failures = (await client.query<{ n: number }>(`SELECT count(*)::int AS n FROM login_attempts WHERE email = $1 AND NOT succeeded AND attempted_at > now() - make_interval(mins => $2)`, [email, FAILED_LOGIN_WINDOW_MINUTES])).rows[0].n;
+    if (failures >= FAILED_LOGIN_LIMIT) return { limited: true as const };
+    // A user's first business is their workspace until business switching exists.
+    const row = (await client.query<{ id: string; password_hash: string; business_id: string; business_name: string }>(
+      `SELECT u.id, u.password_hash, b.id AS business_id, b.name AS business_name FROM users u
+       JOIN memberships m ON m.user_id = u.id JOIN businesses b ON b.id = m.business_id
+       WHERE u.email = $1 ORDER BY m.created_at LIMIT 1`, [email])).rows[0];
+    const ok = row ? await verifyPassword(password, row.password_hash) : await verifyPassword(password, await unknownEmailHash);
+    await client.query("INSERT INTO login_attempts (email, succeeded) VALUES ($1, $2)", [email, ok && !!row]);
+    return { limited: false as const, row: ok ? row : undefined };
+  });
+  if (result.limited) throw new AuthError("rate_limited", "Too many attempts. Wait 15 minutes, then try again.");
+  const row = result.row;
+  if (!row) throw new AuthError("invalid_credentials", "That email and password don’t match an account.");
   return { token: await startSession(row.id, row.business_id), session: { userId: row.id, businessId: row.business_id, email, businessName: row.business_name } satisfies Session };
 }
 

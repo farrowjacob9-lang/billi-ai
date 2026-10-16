@@ -1,6 +1,7 @@
-import { aiConfigured, aiDailyLimit, writeNarrative } from "@/server/ai";
+import { aiConfigured, writeNarrative } from "@/server/ai";
+import { takeAiAllowance } from "@/server/limits";
 import { HttpError, ok, readJson, requireSession, route } from "@/server/http";
-import { clearRuns, listRuns, saveRun, takeAiCall } from "@/server/repo";
+import { clearRuns, listRuns, saveRun } from "@/server/repo";
 import { createReport } from "@/lib/report";
 
 const MAX_BODY = 2.5 * 1024 * 1024; // a 2 MB CSV plus JSON escaping
@@ -21,10 +22,14 @@ export const POST = route(async request => {
   let report;
   try { report = createReport(body.csv, fileName, "pending", new Date().toISOString()); }
   catch (e) { throw new HttpError(422, "invalid_csv", e instanceof Error ? e.message : "We couldn’t read that file."); }
-  if (aiConfigured() && await takeAiCall(session.businessId, aiDailyLimit())) {
+  // A cancelled upload must not spend an AI call or be saved.
+  const cancelled = () => { if (request.signal.aborted) throw new HttpError(499, "cancelled", "The report was cancelled."); };
+  cancelled();
+  if (aiConfigured() && await takeAiAllowance(session.businessId) === "ok") {
     const narrative = await writeNarrative(report, request.signal);
     if (narrative) report = { ...report, narrative, narrativeSource: "ai" as const };
   }
+  cancelled();
   return ok({ report: await saveRun(session.businessId, session.userId, report) }, 201);
 });
 

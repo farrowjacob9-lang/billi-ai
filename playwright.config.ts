@@ -30,6 +30,6 @@ export default defineConfig({
     { command: "node --experimental-strip-types tests/fake-anthropic.ts", url: "http://127.0.0.1:4010/health", reuseExistingServer: !process.env.CI },
     start(3000, {}),
     start(3002, { ...fakeModel, BILLIONS_ANONYMOUS_AI: "on" }),
-    ...(accounts ? [start(3001, { ...fakeModel, DATABASE_URL: accounts })] : []),
+    ...(accounts ? [start(3001, { ...fakeModel, DATABASE_URL: accounts, BILLIONS_SIGNUPS_PER_IP_PER_HOUR: "1000" })] : []),
   ],
 });

@@ -28,8 +28,8 @@ The app listens on port 3000. With no environment variables it runs as a browser
 - Strict column, date, record and currency validation. Financial calculations use integer cents.
 - Weekly income, expense, net-movement and category summaries; daily chart and accessible table.
 - Expandable checks, Markdown report download, run history with search and clearing, routines with create/delete/reuse.
-- **Claude, with verified figures.** The model sees only the calculated totals. Every amount, percentage, count and date in its text must equal a calculated value (`src/lib/ai/verify.ts`); anything else, including rounded or derived figures, is discarded and the template is used instead. The report labels which one you are reading.
-- **Accounts and tenant isolation.** Email and password sign-up creates a business workspace. Sessions are random tokens in an httpOnly cookie, stored only as SHA-256 hashes. Repeated failed sign-ins are throttled. Runs, routines, audit events and AI usage are filtered by business in every query and also guarded by Postgres row-level security.
+- **Claude, without invented numbers.** The model sees only the calculated totals (largest 15 categories plus one "other" line) and never writes a figure: it cites placeholders such as `{income}` or `{category:Rent}` and code fills in the exact value (`src/lib/ai/verify.ts`). A reply containing any digit, number word, currency or percent sign, comparison with another period, or the wrong direction of net movement is discarded and the template is used instead. The report labels which one you are reading.
+- **Accounts and tenant isolation.** Email and password sign-up creates a business workspace. Sessions are random tokens in an httpOnly cookie, stored only as SHA-256 hashes. Sign-ins are throttled per email (atomically, so parallel guesses don't slip through) and per IP; sign-ups per IP; password hashing is concurrency-capped. Model spend is capped per business and across the deployment per day. Runs, routines, audit events and AI usage are filtered by business in every query and also guarded by Postgres row-level security.
 
 Select **Try this report** to start without uploading a file. The sample contains AUD 24,350 income, AUD 8,290 expenses and AUD 16,060 net movement across 12 transactions.
 
@@ -45,7 +45,7 @@ Use real YYYY-MM-DD dates spanning at most seven consecutive calendar days. Posi
 
 ## Database setup
 
-Any Postgres 13+ works (Neon, Supabase, Vercel's Postgres marketplace, RDS). Use two roles: an owner for migrations and a least-privilege role for the app. **The app role must not be a superuser or have BYPASSRLS**, or row-level security is silently skipped.
+Any Postgres 13+ works (Neon, Supabase, Vercel's Postgres marketplace, RDS). Use two roles: an owner for migrations and a least-privilege role for the app. **The app role must not be a superuser or have BYPASSRLS**: row-level security would be skipped, so the app refuses to serve tenant data through such a role.
 
 ```sql
 -- as the owner, after `DATABASE_MIGRATION_URL=<owner url> npm run db:migrate`
@@ -75,6 +75,6 @@ The scope and next production work are in [docs/MVP.md](docs/MVP.md).
 
 Import `farrowjacob9-lang/billi-ai` into Vercel with the Next.js preset, root directory `./`, Node.js 24.x and the default build command. With no environment variables it deploys the browser-only prototype.
 
-To turn on accounts and Claude, add in **Project → Settings → Environment Variables** (mark the secrets Sensitive): `DATABASE_URL` (app role, pooled URL), `ANTHROPIC_API_KEY`, and optionally `BILLIONS_AI_DAILY_LIMIT`. Run the migration and grants above against the database first. Leave `BILLIONS_ANONYMOUS_AI` unset in production.
+To turn on accounts and Claude, add in **Project → Settings → Environment Variables** (mark the secrets Sensitive): `DATABASE_URL` (app role, pooled URL), `ANTHROPIC_API_KEY`, and optionally `BILLIONS_AI_DAILY_LIMIT` and `BILLIONS_AI_GLOBAL_DAILY_LIMIT`. Per-IP limits rely on Vercel's `x-real-ip`; on another host, put a proxy in front that sets it. Run the migration and grants above against the database first. Leave `BILLIONS_ANONYMOUS_AI` unset in production.
 
 After deploying: create a workspace, run **Try this report**, check the takeaway says "Written by Claude · figures verified" (when a key is set) and the totals match the sample above, download the report, sign in from a second browser to confirm the history is there, then check the mobile navigation.

@@ -1,4 +1,5 @@
 import { isReport, isRoutine, readSaved, ROUTINE_KEY, RUN_KEY, writeSaved } from "@/lib/browser";
+import { compactForModel } from "@/lib/ai/verify";
 import type { Report } from "@/lib/report";
 import type { Routine } from "@/lib/types";
 
@@ -43,7 +44,7 @@ export function localStore(caps: Capabilities): Store {
       let report = local;
       if (caps.ai) {
         try {
-          const result = await api<{ narrative: string | null }>("/api/narrative", { method: "POST", body: JSON.stringify({ report: local }), signal });
+          const result = await api<{ narrative: string | null }>("/api/narrative", { method: "POST", body: JSON.stringify({ report: compactForModel(local) }), signal });
           if (result.narrative) report = { ...local, narrative: result.narrative, narrativeSource: "ai" };
         } catch (e) { if (signal.aborted) throw e; }
       }

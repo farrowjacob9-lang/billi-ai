@@ -55,7 +55,7 @@ export async function createRoutine(businessId: string, userId: string, name: st
 }
 
 export async function deleteRoutine(businessId: string, userId: string, id: string): Promise<boolean> {
-  if (!/^[0-9a-f-]{36}$/i.test(id)) return false;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return false;
   return withTenant(businessId, async client => {
     const { rowCount } = await client.query("DELETE FROM routines WHERE id = $1 AND business_id = $2", [id, businessId]);
     if (rowCount) await audit(client, businessId, userId, "routine.deleted", id);

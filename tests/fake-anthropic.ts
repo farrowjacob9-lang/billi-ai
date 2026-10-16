@@ -9,14 +9,12 @@ type Body = { system?: string; messages?: { role: string; content: string }[] };
 
 function reply(body: Body): string {
   const last = String(body.messages?.at(-1)?.content ?? "");
-  const facts = /<facts>(\{.*\})<\/facts>/s.exec(last)?.[1];
-  const parsed = facts ? JSON.parse(facts) as { income: string; expenses: string; netMovement: string; transactions: number; expensesByCategory: { category: string; amount: string; shareOfExpenses: string }[] } : null;
-  const money = (value: string) => `$${Number(value).toLocaleString("en-AU", { minimumFractionDigits: 2 })}`;
+  const hasReport = /<facts>\{/.test(last);
   if (/<question>.*invent/is.test(last)) return "Your income grew 37% to $99,999.99 compared with last week.";
-  if (!parsed) return "Upload a CSV with date, description, category and amount columns, covering up to 7 days.";
-  const top = parsed.expensesByCategory[0];
-  if (last.includes("<question>")) return `Your expenses were ${money(parsed.expenses)}, and ${top.category} was the largest at ${money(top.amount)} (${top.shareOfExpenses} of spending).`;
-  return `A strong week: ${parsed.transactions} transactions brought in ${money(parsed.income)} against ${money(parsed.expenses)} of expenses, leaving ${money(parsed.netMovement)}. ${top.category} led spending at ${money(top.amount)}.`;
+  if (!hasReport) return "Upload a CSV with date, description, category and amount columns, covering up to {maxDays} days.";
+  const top = /"name":"([^"]+)"/.exec(last)?.[1] ?? "";
+  if (last.includes("<question>")) return `Your expenses were {expenses}, and ${top} was the largest at {category:${top}} ({share:${top}} of spending).`;
+  return `A strong week: {transactions} transactions brought in {income} against {expenses} of expenses, a net inflow of {net}. ${top} led spending at {category:${top}}.`;
 }
 
 createServer((request, response) => {

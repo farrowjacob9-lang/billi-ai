@@ -7,6 +7,7 @@ import { HistoryView, RoutinesView } from "@/components/ListViews";
 import { Sidebar } from "@/components/Sidebar";
 import { Toast } from "@/components/ui";
 import { WorkspaceView } from "@/components/WorkspaceView";
+import { compactForModel } from "@/lib/ai/verify";
 import { download } from "@/lib/browser";
 import { modeCopy } from "@/lib/copy";
 import { localReply } from "@/lib/local-reply";
@@ -36,6 +37,8 @@ export function App({ caps }: { caps: Capabilities }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const operation = useRef(0);
   const abort = useRef<AbortController | null>(null);
+  // Bumped whenever the conversation changes, so a late chat reply can't land in the wrong one.
+  const conversation = useRef(0);
 
   const signedOut = caps.mode === "cloud" && !caps.user;
   const store = useMemo(() => caps.mode === "cloud" ? cloudStore() : localStore(caps), [caps]);
@@ -52,18 +55,19 @@ export function App({ caps }: { caps: Capabilities }) {
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(""), 5000); return () => clearTimeout(timer); }, [toast]);
   useEffect(() => () => { operation.current++; abort.current?.abort(); }, []);
 
-  const say = (role: Message["role"], text: string) => setMessages(previous => [...previous, { id: Date.now() + Math.random(), role, text }]);
+  const say = (role: Message["role"], text: string, kind?: Message["kind"]) => setMessages(previous => [...previous, { id: Date.now() + Math.random(), role, text, kind }]);
   function navigate(next: View) { setView(next); setMobileNav(false); }
   function cancelRun() { operation.current++; abort.current?.abort(); setBusy(false); }
-  function newConversation() { cancelRun(); setReport(null); setMessages([]); setError(""); navigate("workspace"); }
+  function openRun(run: Report, clearMessages: boolean) { cancelRun(); conversation.current++; setReplying(false); setReport(run); setError(""); if (clearMessages) setMessages([]); navigate("workspace"); }
+  function newConversation() { conversation.current++; setReplying(false); cancelRun(); setReport(null); setMessages([]); setError(""); navigate("workspace"); }
 
   async function runCsv(csv: string, fileName: string) {
-    cancelRun();
+    cancelRun(); conversation.current++; setReplying(false);
     const current = ++operation.current, controller = new AbortController();
     abort.current = controller;
     const stale = () => operation.current !== current;
     navigate("workspace"); setBusy(true); setStage(0); setError(""); setReport(null);
-    say("user", `Prepare a weekly report from ${fileName}.`);
+    say("user", `Prepare a weekly report from ${fileName}.`, "run");
     try {
       await pause(); if (stale()) return;
       const local = createReport(csv, fileName, crypto.randomUUID());
@@ -74,7 +78,7 @@ export function App({ caps }: { caps: Capabilities }) {
       setReport(result);
       setRuns(previous => [result, ...previous.filter(r => r.id !== result.id)].slice(0, 30));
       if (!saved) setToast("Browser storage is unavailable. You can still download this report, but history won’t survive a refresh.");
-      say("assistant", `Your report is ready. I checked all ${result.rowCount} transactions and reconciled the totals. Review the report and its checks on the right. Your original file is unchanged.`);
+      say("assistant", `Your report is ready. I checked all ${result.rowCount} transactions and reconciled the totals. Review the report and its checks on the right. Your original file is unchanged.`, "run");
     } catch (e) {
       if (stale() || controller.signal.aborted) return;
       setError(e instanceof Error ? e.message : "We couldn’t read that file. Try a fresh CSV export.");
@@ -93,13 +97,17 @@ export function App({ caps }: { caps: Capabilities }) {
   async function send(text: string) {
     say("user", text);
     if (!caps.ai) { say("assistant", localReply(text, report)); return; }
+    const asked = conversation.current, about = report;
     setReplying(true);
+    let answer: string;
     try {
-      const history = messages.slice(-8).map(({ role, text }) => ({ role, text }));
-      const { reply } = await api<{ reply: string | null }>("/api/chat", { method: "POST", body: JSON.stringify({ question: text, report, history }) });
-      say("assistant", reply || localReply(text, report, true));
-    } catch (e) { say("assistant", e instanceof ApiError && e.status === 429 ? e.message : localReply(text, report, true)); }
-    finally { setReplying(false); }
+      const history = messages.filter(m => m.kind !== "run").slice(-8).map(({ role, text }) => ({ role, text }));
+      const { reply } = await api<{ reply: string | null }>("/api/chat", { method: "POST", body: JSON.stringify({ question: text, report: about && compactForModel(about), history }) });
+      answer = reply || localReply(text, about, true);
+    } catch (e) { answer = e instanceof ApiError && e.status === 429 ? e.message : localReply(text, about, true); }
+    if (conversation.current !== asked) return;
+    setReplying(false);
+    say("assistant", answer);
   }
 
   async function saveRoutine(name: string) {
@@ -131,7 +139,7 @@ export function App({ caps }: { caps: Capabilities }) {
 
   return <div className="app-shell">
     <Sidebar view={view} open={mobileNav} runs={runs} routineCount={routines.length} workspaceName={copy.workspaceName} workspaceDetail={copy.workspaceDetail} accountLabel={copy.accountLabel} accountDetail={copy.accountDetail}
-      onNavigate={navigate} onNewConversation={newConversation} onOpenRun={run => { setReport(run); navigate("workspace"); }} onSettings={() => setModal("settings")} onClose={() => setMobileNav(false)} />
+      onNavigate={navigate} onNewConversation={newConversation} onOpenRun={run => openRun(run, false)} onSettings={() => setModal("settings")} onClose={() => setMobileNav(false)} />
 
     <main className="main-shell">
       <header className="topbar"><div className="breadcrumb"><button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMobileNav(true)}><Menu size={20} /></button><span>Workspace</span><ChevronRight size={14} /><strong>{title}</strong></div><div className="topbar-right"><span className="prototype-badge"><span /> {copy.badge}</span><button className="icon-button" aria-label="Workspace settings" onClick={() => setModal("settings")}><Settings2 size={18} /></button></div></header>
@@ -140,7 +148,7 @@ export function App({ caps }: { caps: Capabilities }) {
           onPickFile={() => fileInput.current?.click()} onUpload={file => void upload(file)} onRunSample={runSample} onCancel={() => { cancelRun(); setToast("Report cancelled. Your file is unchanged."); }} onDismissError={() => setError("")}
           onSend={text => void send(text)} onDownloadReport={() => { const r = report || preview; download(`billions-report-${r.startDate}.md`, reportMarkdown(r), "text/markdown"); }}
           onDownloadSample={() => download("billions-sample.csv", SAMPLE_CSV, "text/csv")} onSaveRoutine={() => setModal("routine")} onViewRoutines={() => navigate("routines")} />
-          : view === "history" ? <HistoryView runs={runs} storageNote={copy.storageNote} onOpen={run => { setReport(run); setMessages([]); navigate("workspace"); }} onClear={() => void clearHistory()} onRunSample={runSample} />
+          : view === "history" ? <HistoryView runs={runs} storageNote={copy.storageNote} onOpen={run => openRun(run, true)} onClear={() => void clearHistory()} onRunSample={runSample} />
           : <RoutinesView routines={routines} storageNote={copy.storageNote} banner={copy.routinesBanner} onCreate={() => setModal("routine")} onDelete={routine => void deleteRoutine(routine)} onRun={() => fileInput.current?.click()} />}
       </div>
     </main>

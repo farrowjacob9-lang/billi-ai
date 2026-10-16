@@ -1,67 +1,76 @@
 import type { Report } from "../report.ts";
 
-// The model never sees transactions, descriptions or the file name: only these totals.
+// The model never writes a figure. It writes placeholders such as {income} and code fills in
+// the exact calculated value, so a number in the final text can only come from the calculation.
+// Any digit, number word or comparison in the model's own words rejects the reply.
+
+const MAX_CATEGORIES = 15, OTHER = "All other categories";
+const CONTRACT = { maxDays: "7", maxMegabytes: "2", maxTransactions: "10,000", columns: "4" };
+
+const aud = (cents: number) => new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD", minimumFractionDigits: 2 }).format(cents / 100);
+const day = (date: string) => new Intl.DateTimeFormat("en-AU", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`));
+const percent = (part: number, whole: number) => whole ? `${(part / whole * 100).toFixed(1)}%` : "0.0%";
+
+// Largest categories by name; the rest are folded into one line so a crafted file can't flood the prompt.
+function categories(report: Report) {
+  const top = report.categories.slice(0, MAX_CATEGORIES);
+  const rest = report.categories.slice(MAX_CATEGORIES).reduce((sum, c) => sum + c.cents, 0);
+  return rest ? [...top, { name: OTHER, cents: rest }] : top;
+}
+
+// What the browser sends to the model routes: totals only, at most sixteen category lines, no narrative.
+export const compactForModel = (report: Report): Report =>
+  ({ ...report, fileName: report.fileName.slice(0, 200), categories: categories(report), narrative: undefined, narrativeSource: undefined });
+
+export function placeholderValues(report: Report | null): Map<string, string> {
+  const values = new Map<string, string>(Object.entries(CONTRACT).map(([k, v]) => [k.toLowerCase(), v]));
+  if (!report) return values;
+  const entries: [string, string][] = [
+    ["income", aud(report.income)], ["expenses", aud(report.expenses)], ["net", aud(Math.abs(report.net))],
+    ["transactions", String(report.rowCount)], ["days", String(report.days.length)], ["categories", String(report.categories.length)],
+    ["start", day(report.startDate)], ["end", day(report.endDate)], ["expensesshareofincome", percent(report.expenses, report.income)],
+  ];
+  for (const c of categories(report)) entries.push([`category:${c.name}`, aud(c.cents)], [`share:${c.name}`, percent(c.cents, report.expenses)]);
+  for (const d of report.days) entries.push([`income:${d.date}`, aud(d.income)], [`expenses:${d.date}`, aud(d.expenses)], [`date:${d.date}`, day(d.date)]);
+  for (const [key, value] of entries) values.set(key.toLowerCase(), value);
+  return values;
+}
+
+// What the model is told. Values are shown so it can reason, but it must cite them by placeholder.
 export function reportFacts(report: Report) {
+  const direction = report.net > 0 ? "inflow (income exceeded expenses)" : report.net < 0 ? "outflow (expenses exceeded income)" : "none (income equalled expenses)";
   return {
     currency: "AUD",
-    period: { start: report.startDate, end: report.endDate, days: report.days.length },
-    transactions: report.rowCount,
-    income: dollars(report.income),
-    expenses: dollars(report.expenses),
-    netMovement: dollars(report.net),
-    expensesByCategory: report.categories.map(c => ({ category: c.name, amount: dollars(c.cents), shareOfExpenses: share(c.cents, report.expenses) })),
-    daily: report.days.map(d => ({ date: d.date, income: dollars(d.income), expenses: dollars(d.expenses) })),
+    figures: {
+      "{income}": aud(report.income), "{expenses}": aud(report.expenses), "{net}": `${aud(Math.abs(report.net))}, net ${direction}`,
+      "{transactions}": report.rowCount, "{days}": report.days.length, "{categories}": report.categories.length,
+      "{start}": report.startDate, "{end}": report.endDate, "{expensesShareOfIncome}": percent(report.expenses, report.income),
+    },
+    expenseCategoriesLargestFirst: categories(report).map(c => ({ name: c.name, amount: `{category:${c.name}}`, value: aud(c.cents), share: `{share:${c.name}}`, shareValue: percent(c.cents, report.expenses) })),
+    daily: report.days.map(d => ({ date: `{date:${d.date}}`, income: `{income:${d.date}}`, incomeValue: aud(d.income), expenses: `{expenses:${d.date}}`, expensesValue: aud(d.expenses) })),
   };
 }
 
-const dollars = (cents: number) => (cents / 100).toFixed(2);
-const share = (part: number, whole: number) => whole ? `${(part / whole * 100).toFixed(1)}%` : null;
+// JSON.stringify leaves < and > alone; escape them so a category name can't close the <facts> block.
+export const factsBlock = (report: Report | null) => `<facts>${report ? JSON.stringify(reportFacts(report)).replace(/</g, "\\u003c").replace(/>/g, "\\u003e") : "No report has been prepared yet."}</facts>`;
 
-// Figures the CSV contract itself mentions, so format questions can be answered without a report.
-const CONTRACT_NUMBERS = [2, 4, 7, 10000];
-const NUMBER = String.raw`\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?`;
-const CURRENCY = new RegExp(String.raw`(?:A\$|AU\$|\$|AUD\s?)\s?(-?)(${NUMBER})(\s?(?:k|m|bn|million|thousand|billion)\b)?|(${NUMBER})\s?(?:AUD|dollars)\b`, "gi");
-const PERCENT = new RegExp(String.raw`(${NUMBER})\s?(?:%|per\s?cent\b)`, "gi");
-const ISO_DATE = /\b\d{4}-\d{2}-\d{2}\b/g;
-const BARE = new RegExp(String.raw`(?<![\w.])(${NUMBER})(?:st|nd|rd|th)?(?![\w])`, "gi");
+const NUMBER_WORDS = /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundreds?|thousands?|millions?|billions?|dozens?|half|halves|double[ds]?|twice|triple[ds]?|quarter|third|fourth|fifth|percent|per cent|majority|most of|single|once)\b/i;
+const COMPARISONS = /\b(last|previous|prior|next) (week|month|quarter|year|period)\b|\b(compared|versus|vs\.?|year[- ]on[- ]year|growth|grew|increase[sd]?|decrease[sd]?|rose|fell|dropped|up on|down on|forecast|projected?|expect(ed)?|average|typical)\b/i;
+const OUTFLOW_WORDS = /\b(loss|deficit|outflow|overspen[dt]|negative|shortfall|in the red)\b/i;
+const INFLOW_WORDS = /\b(profit|surplus|inflow|positive|in the black)\b/i;
 
-const toNumber = (value: string) => Number(value.replace(/,/g, ""));
+export type Verification = { ok: true; text: string } | { ok: false; reasons: string[] };
 
-function allowed(report: Report | null) {
-  const cents = new Set<number>(), percents: number[] = [], integers = new Set<number>(CONTRACT_NUMBERS), dates = new Set<string>();
-  if (report) {
-    for (const value of [report.income, report.expenses, report.net, ...report.categories.map(c => c.cents), ...report.days.flatMap(d => [d.income, d.expenses, d.income - d.expenses])]) cents.add(Math.abs(value));
-    const ratios = [...report.categories.flatMap(c => [[c.cents, report.expenses], [c.cents, report.income]]), [report.expenses, report.income], [report.net, report.income]];
-    for (const [part, whole] of ratios) if (whole) percents.push(Math.abs(part / whole * 100));
-    for (const value of [report.rowCount, report.days.length, report.categories.length]) integers.add(value);
-    for (const day of report.days) { dates.add(day.date); integers.add(Number(day.date.slice(8, 10))); integers.add(Number(day.date.slice(0, 4))); }
-  }
-  return { cents, percents, integers, dates };
-}
-
-// A percentage passes when it equals a real share at the precision the model chose to write.
-function matchesPercent(text: string, percents: number[]) {
-  const decimals = text.includes(".") ? text.split(".")[1].length : 0;
-  const value = toNumber(text);
-  return decimals <= 2 && percents.some(p => Math.abs(Number(p.toFixed(decimals)) - value) < 1e-9);
-}
-
-export type Verification = { ok: boolean; unverified: string[] };
-
-// Every figure in model-written text must equal a calculated total. Anything else, including
-// rounded ("$16k") or derived figures we did not compute, fails and the text is not shown.
-export function verifyFigures(text: string, report: Report | null): Verification {
-  const { cents, percents, integers, dates } = allowed(report);
-  const unverified: string[] = [];
-  let rest = text.replace(/−/g, "-");
-  rest = rest.replace(ISO_DATE, match => { if (!dates.has(match)) unverified.push(match); return " "; });
-  rest = rest.replace(CURRENCY, (match, _sign: string, amount: string | undefined, suffix: string | undefined, trailing: string | undefined) => {
-    const value = amount ?? trailing ?? "";
-    const decimals = value.includes(".") ? value.split(".")[1].length : 0;
-    if (suffix || decimals > 2 || !cents.has(Math.round(toNumber(value) * 100))) unverified.push(match.trim());
-    return " ";
-  });
-  rest = rest.replace(PERCENT, (match, value: string) => { if (!matchesPercent(value, percents)) unverified.push(match.trim()); return " "; });
-  for (const match of rest.matchAll(BARE)) if (!integers.has(toNumber(match[1]))) unverified.push(match[0]);
-  return { ok: unverified.length === 0, unverified };
+export function fillPlaceholders(raw: string, report: Report | null): Verification {
+  const values = placeholderValues(report), reasons: string[] = [];
+  const prose = raw.replace(/\{([^{}]{1,240})\}/g, (match, key: string) => { if (!values.has(key.trim().toLowerCase())) reasons.push(`unknown ${match}`); return " "; });
+  if (/[{}]/.test(prose)) reasons.push("stray brace");
+  if (/\d/.test(prose)) reasons.push("digit written directly");
+  if (/[%$€£¥]/.test(prose)) reasons.push("symbol written directly");
+  const word = NUMBER_WORDS.exec(prose); if (word) reasons.push(`number word "${word[0]}"`);
+  const comparison = COMPARISONS.exec(prose); if (comparison) reasons.push(`comparison "${comparison[0]}"`);
+  if (report && report.net >= 0 && OUTFLOW_WORDS.test(prose)) reasons.push("describes an outflow");
+  if (report && report.net <= 0 && INFLOW_WORDS.test(prose)) reasons.push("describes an inflow");
+  if (reasons.length) return { ok: false, reasons };
+  return { ok: true, text: raw.replace(/\{([^{}]{1,240})\}/g, (_m, key: string) => values.get(key.trim().toLowerCase())!) };
 }

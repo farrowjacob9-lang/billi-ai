@@ -7,7 +7,7 @@ test("a verified model narrative replaces the template and says so", async ({ pa
   await expect(page.getByText("Only the calculated totals are sent to Claude.")).toBeVisible();
   await page.getByRole("button", { name: "Try this report" }).click();
   await expect(page.getByText("Written by Claude · figures verified")).toBeVisible();
-  await expect(page.getByText(/A strong week: 12 transactions brought in \$24,350\.00/)).toBeVisible();
+  await expect(page.getByText("A strong week: 12 transactions brought in $24,350.00 against $8,290.00 of expenses, a net inflow of $16,060.00. Operations led spending at $3,600.00.")).toBeVisible();
   const downloading = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download report" }).click();
   let content = "";
@@ -16,7 +16,7 @@ test("a verified model narrative replaces the template and says so", async ({ pa
 
   // The provider received totals, never the transactions themselves.
   const sent = JSON.stringify(await (await request.get(FAKE)).json());
-  expect(sent).toContain("24350.00");
+  expect(sent).toContain("$24,350.00");
   expect(sent).not.toContain("Website discovery");
   expect(sent).not.toContain("sample-week.csv");
 });

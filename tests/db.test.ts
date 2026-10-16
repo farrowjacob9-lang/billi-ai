@@ -13,7 +13,7 @@ const dbName = `billions_test_${randomBytes(4).toString("hex")}`;
 const role = "billions_app_test", rolePassword = randomBytes(12).toString("hex");
 let appUrl = "";
 
-type Modules = { auth: typeof import("../src/server/auth.ts"); repo: typeof import("../src/server/repo.ts"); db: typeof import("../src/server/db.ts") };
+type Modules = { auth: typeof import("../src/server/auth.ts"); repo: typeof import("../src/server/repo.ts"); db: typeof import("../src/server/db.ts"); limits: typeof import("../src/server/limits.ts") };
 let m: Modules;
 
 const withUrl = (url: string, database: string, user?: string, password?: string) => {
@@ -38,7 +38,7 @@ before(async () => {
   await owner.end();
   appUrl = withUrl(admin, dbName, role, rolePassword);
   process.env.DATABASE_URL = appUrl;
-  m = { auth: await import("../src/server/auth.ts"), repo: await import("../src/server/repo.ts"), db: await import("../src/server/db.ts") };
+  m = { auth: await import("../src/server/auth.ts"), repo: await import("../src/server/repo.ts"), db: await import("../src/server/db.ts"), limits: await import("../src/server/limits.ts") };
 });
 
 after(async () => {
@@ -115,4 +115,25 @@ test("stored runs keep the calculated report only, never the CSV", { skip }, asy
   await m.repo.saveRun(a.businessId, a.userId, createReport(SAMPLE_CSV, "week.csv", "pending", new Date().toISOString()));
   const raw = await m.db.withTenant(a.businessId, client => client.query<{ report: unknown }>("SELECT report FROM runs WHERE business_id = $1", [a.businessId]));
   assert.doesNotMatch(JSON.stringify(raw.rows), /Website discovery|Studio rent/);
+});
+
+test("parallel wrong guesses can't race past the sign-in throttle", { skip }, async () => {
+  await signUp("race@example.com");
+  const results = await Promise.allSettled(Array.from({ length: 12 }, () => m.auth.logIn({ email: "race@example.com", password: "wrong password!" })));
+  const codes = results.map(r => r.status === "rejected" ? (r.reason as { code: string }).code : "ok");
+  assert.equal(codes.filter(c => c === "invalid_credentials").length, 5, "exactly five passwords were checked");
+  assert.equal(codes.filter(c => c === "rate_limited").length, 7);
+});
+
+test("rate limits count atomically within a window", { skip }, async () => {
+  const key = `test:${randomBytes(4).toString("hex")}`;
+  const taken = await Promise.all(Array.from({ length: 10 }, () => m.limits.takeRateLimit(key, 3, 3600)));
+  assert.equal(taken.filter(Boolean).length, 3);
+});
+
+test("the app refuses to serve tenant data through a role that bypasses row-level security", { skip }, async () => {
+  await m.db.closePool();
+  process.env.DATABASE_URL = withUrl(admin!, dbName);
+  try { await assert.rejects(m.repo.listRuns("00000000-0000-0000-0000-000000000000"), /superuser or BYPASSRLS/); }
+  finally { await m.db.closePool(); process.env.DATABASE_URL = appUrl; }
 });

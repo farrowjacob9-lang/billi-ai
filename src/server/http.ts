@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { AuthError, SESSION_COOKIE, SESSION_DAYS, sessionFromToken, type Session } from "./auth.ts";
 import { databaseConfigured } from "./db.ts";
 
@@ -40,16 +40,35 @@ export function assertSameOrigin(request: Request) {
   if (!originHost || !hosts.includes(originHost)) throw new HttpError(403, "cross_site", "Cross-site requests are not allowed.");
 }
 
+// Reads the body as a stream and stops at maxBytes, so a chunked upload without a
+// Content-Length can't be buffered whole before the size check.
 export async function readJson<T extends Record<string, unknown>>(request: Request, maxBytes: number): Promise<Partial<T>> {
-  const declared = Number(request.headers.get("content-length") || 0);
-  if (declared > maxBytes) throw new HttpError(413, "too_large", "That request is too large.");
-  const text = await request.text();
-  if (Buffer.byteLength(text) > maxBytes) throw new HttpError(413, "too_large", "That request is too large.");
+  const tooLarge = () => new HttpError(413, "too_large", "That request is too large.");
+  if (Number(request.headers.get("content-length") || 0) > maxBytes) throw tooLarge();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  if (request.body) {
+    const reader = request.body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) { await reader.cancel().catch(() => undefined); throw tooLarge(); }
+      chunks.push(value);
+    }
+  }
+  const text = Buffer.concat(chunks).toString("utf8");
   try {
     const value: unknown = JSON.parse(text || "{}");
     if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error();
     return value as Partial<T>;
   } catch { throw new HttpError(400, "invalid_json", "The request body must be a JSON object."); }
+}
+
+// Vercel sets x-real-ip and rewrites x-forwarded-for; on other hosts put a proxy in front that does.
+export async function clientIp(): Promise<string> {
+  const h = await headers();
+  return h.get("x-real-ip")?.trim() || h.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
 }
 
 export async function currentSession(): Promise<Session | null> {

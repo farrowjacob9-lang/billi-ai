@@ -27,7 +27,7 @@ Status as of 17 Oct 2026. ✅ built and tested · ◐ partly · ○ not started.
 2. ◐ PostgreSQL for runs, versioned routine definitions (insert-only rows with a `definition`) and audit records. No object storage: by decision, source files are never kept, so there is nothing to store yet. Outputs are regenerated from the stored report.
 3. ◐ Server-side schema and file validation and upload limits: the server re-validates and recalculates every CSV. Retention policies and signed file access are not built (no files are retained).
 4. ○ Durable execution. Reports finish in one request today, so there is no queue, run state machine or resumable work; build this alongside scheduled routines.
-5. ✅ One model provider through a backend gateway (`src/server/ai.ts`). Only calculated totals are sent; every figure in the narrative and chat replies is checked against them before display, with the template as fallback. Credentials never reach the browser. Per-business daily allowance; server-side refusal fallback enabled.
+5. ✅ One model provider through a backend gateway (`src/server/ai.ts`). Only calculated totals are sent. The model cites figures by placeholder and code fills in the exact values; replies with any self-written number, comparison or wrong direction fall back to the template. Credentials never reach the browser. Per-business and deployment-wide daily caps; server-side refusal fallback enabled. Known gap: the check can't catch a placeholder used in the wrong sentence (say, calling {expenses} income).
 6. ○ Explicit permissions and approvals for any future external action. Nothing external is written or sent today.
 
 ## Acceptance criteria
