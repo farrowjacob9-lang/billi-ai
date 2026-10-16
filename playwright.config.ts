@@ -12,5 +12,6 @@ export default defineConfig({
     },
     viewport: { width: 1440, height: 1080 },
   },
-  webServer: { command: "npm run dev -- --port 3000", url: "http://127.0.0.1:3000", reuseExistingServer: !process.env.CI },
+  // Test the production build: the dev server refuses client chunks to 127.0.0.1, so the page never hydrates.
+  webServer: { command: "npm run build && npm run start -- --port 3000", url: "http://127.0.0.1:3000", reuseExistingServer: !process.env.CI, timeout: 180_000 },
 });
