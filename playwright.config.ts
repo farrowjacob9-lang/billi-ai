@@ -1,17 +1,35 @@
 import { defineConfig } from "@playwright/test";
 import { existsSync } from "node:fs";
 
+// Run with `npm run test:e2e`, which builds first. The servers below start that one build
+// three ways: browser-only, browser-only with a model, and accounts (when E2E_DATABASE_URL is set).
+// Production builds are used because the dev server refuses client chunks to 127.0.0.1.
+const accounts = process.env.E2E_DATABASE_URL;
+const fakeModel = { ANTHROPIC_API_KEY: "test-key", ANTHROPIC_BASE_URL: "http://127.0.0.1:4010", BILLIONS_MODEL: "fake" };
+const start = (port: number, env: Record<string, string>) => ({
+  command: `npx next start --hostname 127.0.0.1 --port ${port}`, url: `http://127.0.0.1:${port}`, reuseExistingServer: !process.env.CI, timeout: 60_000,
+  env: { ANTHROPIC_API_KEY: "", DATABASE_URL: "", ...env },
+});
+
 export default defineConfig({
   testDir: "./tests/browser",
   fullyParallel: true,
   use: {
-    baseURL: "http://127.0.0.1:3000",
     launchOptions: {
       executablePath: process.env.CHROMIUM_EXECUTABLE || (existsSync("/usr/bin/chromium") ? "/usr/bin/chromium" : undefined),
       args: ["--no-sandbox"],
     },
     viewport: { width: 1440, height: 1080 },
   },
-  // Test the production build: the dev server refuses client chunks to 127.0.0.1, so the page never hydrates.
-  webServer: { command: "npm run build && npm run start -- --port 3000", url: "http://127.0.0.1:3000", reuseExistingServer: !process.env.CI, timeout: 180_000 },
+  projects: [
+    { name: "browser-only", testMatch: "workspace.spec.ts", use: { baseURL: "http://127.0.0.1:3000" } },
+    { name: "with-model", testMatch: "model.spec.ts", use: { baseURL: "http://127.0.0.1:3002" } },
+    ...(accounts ? [{ name: "accounts", testMatch: "accounts.spec.ts", use: { baseURL: "http://127.0.0.1:3001" } }] : []),
+  ],
+  webServer: [
+    { command: "node --experimental-strip-types tests/fake-anthropic.ts", url: "http://127.0.0.1:4010/health", reuseExistingServer: !process.env.CI },
+    start(3000, {}),
+    start(3002, { ...fakeModel, BILLIONS_ANONYMOUS_AI: "on" }),
+    ...(accounts ? [start(3001, { ...fakeModel, DATABASE_URL: accounts })] : []),
+  ],
 });

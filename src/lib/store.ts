@@ -7,7 +7,9 @@ export type Capabilities = { mode: "local" | "cloud"; ai: boolean; user: { email
 export const LOCAL_CAPABILITIES: Capabilities = { mode: "local", ai: false, user: null };
 
 export class ApiError extends Error {
-  constructor(message: string, readonly status: number, readonly code: string) { super(message); }
+  readonly status: number;
+  readonly code: string;
+  constructor(message: string, status: number, code: string) { super(message); this.status = status; this.code = code; }
 }
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {

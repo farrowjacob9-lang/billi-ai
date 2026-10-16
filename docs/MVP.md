@@ -10,7 +10,7 @@ Upload a weekly transaction CSV → validate inputs → calculate metrics in cod
 
 The initial CSV contract is `date,description,category,amount`. Dates use YYYY-MM-DD. Amounts are AUD with at most two decimal places: positive for income, negative for expenses. One file covers at most seven consecutive calendar dates. Reject malformed records rather than silently omitting them. Preserve the original file. No external writes or sending.
 
-## Interface prototype (this implementation)
+## Interface prototype (first implementation)
 
 - Responsive workspace with conversation, report preview and verification details.
 - Working sample and local CSV upload, deterministic financial calculations and download.
@@ -19,20 +19,22 @@ The initial CSV contract is `date,description,category,amount`. Dates use YYYY-M
 - Accessible controls, visible errors, drag and drop, mobile navigation and keyboard support.
 - No authentication, tenant security, database, cloud file storage, scheduling or third-party integrations are claimed by this prototype.
 
-## Production foundation (next implementation)
+## Production foundation
 
-1. Authentication and business membership, with server-enforced tenant isolation from the first stored record.
-2. PostgreSQL for runs, versioned routine definitions and audit records; private object storage for source files and outputs.
-3. Server-side schema and file validation, upload limits, retention policies and signed file access.
-4. Durable execution with queued, running, validating, completed, failed and cancelled states; idempotency and resumable work.
-5. One model provider through a backend gateway. Send only necessary data; validate narrative claims against calculated metrics. Never expose provider credentials to the browser.
-6. Explicit permissions and approvals for any future external action. Published routines never grant access to their underlying resources.
+Status as of 17 Oct 2026. ✅ built and tested · ◐ partly · ○ not started.
+
+1. ✅ Authentication and business membership, with server-enforced tenant isolation from the first stored record. Email and password (scrypt), hashed session tokens, failed-login throttling; every tenant query filters on the session's business and runs under Postgres row-level security. Gaps: no email verification, password reset, invitations or business switching yet.
+2. ◐ PostgreSQL for runs, versioned routine definitions (insert-only rows with a `definition`) and audit records. No object storage: by decision, source files are never kept, so there is nothing to store yet. Outputs are regenerated from the stored report.
+3. ◐ Server-side schema and file validation and upload limits: the server re-validates and recalculates every CSV. Retention policies and signed file access are not built (no files are retained).
+4. ○ Durable execution. Reports finish in one request today, so there is no queue, run state machine or resumable work; build this alongside scheduled routines.
+5. ✅ One model provider through a backend gateway (`src/server/ai.ts`). Only calculated totals are sent; every figure in the narrative and chat replies is checked against them before display, with the template as fallback. Credentials never reach the browser. Per-business daily allowance; server-side refusal fallback enabled.
+6. ○ Explicit permissions and approvals for any future external action. Nothing external is written or sent today.
 
 ## Acceptance criteria
 
 Correct integer-cent financial calculations; invalid records stop processing with actionable errors; original source is unchanged; checks distinguish input validation from output preparation; completed reports download correctly; run history survives refresh; routine configurations can be reused; production build and browser workflow pass.
 
-Production readiness additionally requires cross-tenant access tests, secure upload/storage tests, provider failure handling, retention/deletion, durable execution and real authentication. Local browser persistence is a prototype convenience, not an implementation of business security.
+Production readiness additionally requires cross-tenant access tests (done: `tests/db.test.ts`, `tests/browser/accounts.spec.ts`), secure upload/storage tests, provider failure handling (done: failures, refusals and unverifiable replies fall back to the template), retention/deletion, durable execution and real authentication (done, without verification or reset). Local browser persistence is a prototype convenience, not an implementation of business security.
 
 ## Deferred
 
