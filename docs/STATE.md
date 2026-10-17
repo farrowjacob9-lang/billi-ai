@@ -12,10 +12,11 @@ Read this first. Last updated 17 Oct 2026. Branch: `claude/serene-albattani-sqwi
 - Tests: `npm test` (33, set `TEST_DATABASE_URL` for the Postgres ones), `npm run test:e2e` (19; set `E2E_DATABASE_URL` for accounts, which use a fake Resend server).
 
 ## Operator to-dos (outside the code)
+- [ ] Reset the `authenticator` role password in Neon (its connection string was pasted in chat on 17 Oct).
 - [ ] Revoke the Neon API key that was pasted in chat (Neon › Account settings › API keys).
 - [ ] Reset `billions_app` password in Neon; keep it in a password manager.
 - [ ] Turn off Neon Data API (unused).
-- [ ] **Apply migration 004 to Neon** (`DATABASE_MIGRATION_URL=<owner direct URL> npm run db:migrate`). It grants `email_tokens` to `billions_app` itself; check with `\dp email_tokens`.
+- [x] Migration 004 applied to Neon production (17 Oct, via the SQL Editor as owner; `schema_migrations` shows 001–004).
 - [ ] Resend: verify the sending domain; set `RESEND_API_KEY` and `EMAIL_FROM` in Vercel as Sensitive (never in chat). `BILLIONS_APP_URL` only if not using the Vercel production domain. Any of these set without the rest keeps AI off for unverified accounts (fail closed).
 - [ ] Legal: fill `src/lib/legal.ts` (entity, ABN, contact email, state), lawyer review of `/privacy` + `/terms`, then set `draft: false`.
 - [ ] Merge the branch, then Vercel: Node 24.x, `DATABASE_URL` = billions_app pooled URL, `ANTHROPIC_API_KEY`, Resend vars, all Sensitive.
