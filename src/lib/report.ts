@@ -11,6 +11,9 @@ export type Report = {
   rowCount: number;
   days: { date: string; income: number; expenses: number }[];
   categories: { name: string; cents: number }[];
+  // Set only when a model wrote the narrative and every figure in it was verified.
+  narrative?: string;
+  narrativeSource?: "ai" | "template";
 };
 
 export const SAMPLE_CSV = `date,description,category,amount
@@ -94,10 +97,15 @@ export function createReport(csv: string, fileName: string, id = "preview", now 
 
 export const money = (cents: number, decimals = false) => new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: decimals ? 2 : (cents % 100 ? 2 : 0) }).format(cents / 100);
 export const shortDate = (date: string) => new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(date));
-export function narrative(report: Report): string {
+export function templateNarrative(report: Report): string {
   const top = report.categories[0];
   return `${report.rowCount} transactions recorded ${money(report.income, true)} in income and ${money(report.expenses, true)} in expenses, leaving a net ${report.net < 0 ? "outflow" : "inflow"} of ${money(Math.abs(report.net), true)}.${top ? ` ${top.name} was the largest expense category at ${money(top.cents, true)}.` : " No expenses were recorded."}`;
 }
+export const reportNarrative = (report: Report) => report.narrativeSource === "ai" && report.narrative ? report.narrative : templateNarrative(report);
+export const narrativeNote = (report: Report) => report.narrativeSource === "ai" && report.narrative
+  ? "The overview was written by Claude from the calculated totals only, and every figure in it was checked against them before it was shown."
+  : "This report uses a deterministic narrative template, not an AI model.";
+
 export function reportMarkdown(report: Report): string {
-  return `# Weekly business report\n\n${shortDate(report.startDate)} – ${shortDate(report.endDate)}\n\nCurrency: AUD\nSource: ${report.fileName}\nTransactions: ${report.rowCount}\n\n## Overview\n\n${narrative(report)}\n\n## Metrics\n\n- Income: ${money(report.income, true)}\n- Expenses: ${money(report.expenses, true)}\n- Net movement: ${money(report.net, true)}\n\n## Expenses by category\n\n${report.categories.map(x => `- ${x.name}: ${money(x.cents, true)}`).join("\n") || "No expenses recorded."}\n\n## Validation\n\nRequired fields, dates, amount precision, reporting period and totals checked. Calculations use integer cents. Every source record is included. Original file unchanged.\n\nThis prototype uses a deterministic narrative template, not an AI model. Positive amounts are treated as income and negative amounts as expenses. This is a transaction summary, not a profit-and-loss statement, tax calculation or bank balance.\n`;
+  return `# Weekly business report\n\n${shortDate(report.startDate)} – ${shortDate(report.endDate)}\n\nCurrency: AUD\nSource: ${report.fileName}\nTransactions: ${report.rowCount}\n\n## Overview\n\n${reportNarrative(report)}\n\n## Metrics\n\n- Income: ${money(report.income, true)}\n- Expenses: ${money(report.expenses, true)}\n- Net movement: ${money(report.net, true)}\n\n## Expenses by category\n\n${report.categories.map(x => `- ${x.name}: ${money(x.cents, true)}`).join("\n") || "No expenses recorded."}\n\n## Validation\n\nRequired fields, dates, amount precision, reporting period and totals checked. Calculations use integer cents. Every source record is included. Original file unchanged.\n\n${narrativeNote(report)} Positive amounts are treated as income and negative amounts as expenses. This is a transaction summary, not a profit-and-loss statement, tax calculation or bank balance.\n`;
 }
