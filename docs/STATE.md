@@ -12,7 +12,7 @@ Read this first. Last updated 17 Oct 2026. Branch: `claude/serene-albattani-sqwi
 - Tests: `npm test` (33, set `TEST_DATABASE_URL` for the Postgres ones), `npm run test:e2e` (19; set `E2E_DATABASE_URL` for accounts, which use a fake Resend server).
 
 ## Operator to-dos (outside the code)
-- [ ] Reset the `authenticator` role password in Neon (its connection string was pasted in chat on 17 Oct).
+- [x] `authenticator` role password reset (17 Oct, after its connection string was pasted in chat).
 - [ ] Revoke the Neon API key that was pasted in chat (Neon › Account settings › API keys).
 - [ ] Reset `billions_app` password in Neon; keep it in a password manager.
 - [ ] Turn off Neon Data API (unused).
