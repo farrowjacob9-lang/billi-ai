@@ -12,11 +12,11 @@ export const POST = route(async request => {
   const email = normalizeEmail(body.email);
   if (!email) throw new HttpError(400, "invalid_input", "Enter the email you signed up with.");
   const ip = await clientIp();
-  if (!await takeRateLimit(`reset:ip:${ip}`, LIMITS.resetRequestsPerIpPerHour, 3600)) throw new HttpError(429, "rate_limited", "Too many reset requests from this network. Try again in an hour.");
+  if (!await takeRateLimit(`reset:ip:${ip}`, LIMITS.resetRequestsPerIpPerHour(), 3600)) throw new HttpError(429, "rate_limited", "Too many reset requests from this network. Try again in an hour.");
   after(async () => {
     try {
       if (!await takeRateLimit(`reset:email-ip:${email}:${ip}`, LIMITS.resetEmailsPerAddressAndIpPerHour, 3600)) return;
-      if (!await takeRateLimit(`reset:email:${email}`, LIMITS.resetEmailsPerAddressPerHour, 3600)) return;
+      if (!await takeRateLimit(`reset:email-day:${email}`, LIMITS.resetEmailsPerAddressPerDay, 86400)) return;
       const link = await requestPasswordReset(email);
       if (link) await sendPasswordResetEmail(link);
     } catch (e) { console.error("[auth] password reset request failed", e instanceof Error ? e.message : e); }

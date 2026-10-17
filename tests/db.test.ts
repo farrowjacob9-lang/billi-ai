@@ -274,8 +274,8 @@ test("deleting an account removes the user, their business and its data, and not
 test("a password change can't go through on a session that ended after its checks", { skip }, async () => {
   const { token, session } = await signUp("stale@example.com");
   await m.auth.endSession(token);
-  await assert.rejects(m.auth.changePassword(session, token, { currentPassword: "correct horse battery", newPassword: "a brand new passphrase" }), { code: "wrong_password" });
-  await assert.rejects(m.auth.deleteAccount(session, token, "correct horse battery"), { code: "wrong_password" });
+  await assert.rejects(m.auth.changePassword(session, token, { currentPassword: "correct horse battery", newPassword: "a brand new passphrase" }), { code: "signed_out" });
+  await assert.rejects(m.auth.deleteAccount(session, token, "correct horse battery"), { code: "signed_out" });
   assert.ok(await m.auth.logIn({ email: "stale@example.com", password: "correct horse battery" }), "nothing changed");
 });
 

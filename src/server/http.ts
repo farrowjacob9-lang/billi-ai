@@ -2,6 +2,7 @@ import { cookies, headers } from "next/headers";
 import { AuthError, SESSION_COOKIE, SESSION_DAYS, sessionFromToken, type Session } from "./auth.ts";
 import { databaseConfigured } from "./db.ts";
 import { emailConfigured } from "./email.ts";
+import { ipBucket } from "./ip.ts";
 
 export class HttpError extends Error {
   readonly status: number;
@@ -12,7 +13,7 @@ export class HttpError extends Error {
 export const fail = (status: number, code: string, message: string) => Response.json({ error: { code, message } }, { status, headers: { "cache-control": "no-store" } });
 export const ok = (body: unknown, status = 200) => Response.json(body, { status, headers: { "cache-control": "no-store" } });
 
-const AUTH_STATUS: Record<AuthError["code"], number> = { invalid_input: 400, email_taken: 409, invalid_credentials: 401, wrong_password: 403, invalid_token: 400, rate_limited: 429 };
+const AUTH_STATUS: Record<AuthError["code"], number> = { signed_out: 401, invalid_input: 400, email_taken: 409, invalid_credentials: 401, wrong_password: 403, invalid_token: 400, rate_limited: 429 };
 
 // Wraps a route so every failure leaves in the same { error: { code, message } } envelope.
 export function route<A extends unknown[]>(handler: (request: Request, ...rest: A) => Promise<Response>) {
@@ -67,9 +68,10 @@ export async function readJson<T extends Record<string, unknown>>(request: Reque
 }
 
 // Vercel sets x-real-ip and rewrites x-forwarded-for; on other hosts put a proxy in front that does.
+// Used only for rate limits, so it returns the network bucket rather than the exact address.
 export async function clientIp(): Promise<string> {
   const h = await headers();
-  return h.get("x-real-ip")?.trim() || h.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
+  return ipBucket(h.get("x-real-ip")?.trim() || h.get("x-forwarded-for")?.split(",")[0].trim() || "unknown");
 }
 
 export const sessionToken = async () => (await cookies()).get(SESSION_COOKIE)?.value;

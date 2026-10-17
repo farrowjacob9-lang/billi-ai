@@ -9,10 +9,12 @@ import type { Capabilities } from "../lib/store.ts";
 // Until its email is verified, an account gets reports but not the model, so a sign-up with
 // someone else's address can't spend. Without email set up there is no way to verify: no gate.
 // A half-finished email setup keeps the gate closed rather than quietly opening it.
+let warnedMisconfigured = false;
 export const aiAllowedFor = (session: Session) => {
   if (session.emailVerified || emailConfigured()) return session.emailVerified;
-  if (emailMisconfigured()) { console.error("[email] RESEND_API_KEY, EMAIL_FROM and an https BILLIONS_APP_URL are all needed; the AI stays off for unverified accounts"); return false; }
-  return true;
+  if (!emailMisconfigured()) return true;
+  if (!warnedMisconfigured) { warnedMisconfigured = true; console.error("[email] RESEND_API_KEY, EMAIL_FROM and an https BILLIONS_APP_URL are all needed; the AI stays off for unverified accounts until they are"); }
+  return false;
 };
 
 export async function capabilities(): Promise<Capabilities> {

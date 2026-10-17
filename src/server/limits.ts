@@ -14,11 +14,11 @@ export async function takeRateLimit(key: string, limit: number, windowSeconds: n
 export const LIMITS = {
   signupsPerIpPerHour: () => Number(process.env.BILLIONS_SIGNUPS_PER_IP_PER_HOUR) || 5,
   signInsPerIpPer15Minutes: () => Number(process.env.BILLIONS_SIGNINS_PER_IP_PER_15_MINUTES) || 30,
-  // Emailed links: per IP, and per address so one inbox can't be flooded. Reset emails are also
-  // limited per (address, IP), so a stranger using up their share can't block the owner's.
-  resetRequestsPerIpPerHour: 10,
+  // Emailed links. Reset emails are limited per (address, network), so a stranger using up their
+  // share doesn't use up the owner's; the per-address daily cap only guards the inbox against floods.
+  resetRequestsPerIpPerHour: () => Number(process.env.BILLIONS_RESET_REQUESTS_PER_IP_PER_HOUR) || 10,
   resetEmailsPerAddressAndIpPerHour: 3,
-  resetEmailsPerAddressPerHour: 10,
+  resetEmailsPerAddressPerDay: 30,
   verifyEmailsPerUserPerHour: 3,
   verifyEmailsPerUserPerDay: 6,
   // Token redemptions; guessing a 256-bit token is hopeless, this bounds password hashing work.

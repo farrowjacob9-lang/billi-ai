@@ -4,7 +4,7 @@ import { getPool, query, transaction } from "./db.ts";
 
 export type Session = { userId: string; businessId: string; email: string; businessName: string; emailVerified: boolean };
 export class AuthError extends Error {
-  readonly code: "invalid_input" | "email_taken" | "invalid_credentials" | "wrong_password" | "invalid_token" | "rate_limited";
+  readonly code: "signed_out" | "invalid_input" | "email_taken" | "invalid_credentials" | "wrong_password" | "invalid_token" | "rate_limited";
   constructor(code: AuthError["code"], message: string) { super(message); this.code = code; }
 }
 
@@ -252,7 +252,8 @@ async function confirmPassword(session: Session, password: unknown): Promise<str
 async function assertStillCurrent(client: pg.PoolClient, session: Session, token: string, checkedHash: string) {
   const live = (await client.query("SELECT 1 FROM sessions WHERE token_hash = $1 AND user_id = $2 FOR UPDATE", [hashToken(token), session.userId])).rowCount;
   const same = (await client.query("SELECT 1 FROM users WHERE id = $1 AND password_hash = $2 FOR UPDATE", [session.userId, checkedHash])).rowCount;
-  if (!live || !same) throw new AuthError("wrong_password", "Your password was just changed elsewhere. Sign in again and retry.");
+  if (!live) throw new AuthError("signed_out", "Your session has ended. Sign in again.");
+  if (!same) throw new AuthError("wrong_password", "Your password was just changed elsewhere. Sign in again and retry.");
 }
 
 // Keeps the session that made the change and signs out every other device.
