@@ -33,6 +33,6 @@ export default defineConfig({
     ...(accounts ? [{ command: "node --experimental-strip-types tests/fake-resend.ts", url: "http://127.0.0.1:4011/health", reuseExistingServer: !process.env.CI }] : []),
     start(3000, {}),
     start(3002, { ...fakeModel, BILLIONS_ANONYMOUS_AI: "on" }),
-    ...(accounts ? [start(3001, { ...fakeModel, ...fakeEmail, DATABASE_URL: accounts, BILLIONS_SIGNUPS_PER_IP_PER_HOUR: "1000" })] : []),
+    ...(accounts ? [start(3001, { ...fakeModel, ...fakeEmail, DATABASE_URL: accounts, BILLIONS_SIGNUPS_PER_IP_PER_HOUR: "1000", BILLIONS_SIGNINS_PER_IP_PER_15_MINUTES: "1000", BILLIONS_LINK_REDEMPTIONS_PER_IP_PER_15_MINUTES: "1000" })] : []),
   ],
 });

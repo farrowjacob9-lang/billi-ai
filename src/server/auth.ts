@@ -54,7 +54,9 @@ let dummyHash: Promise<string> | null = null;
 
 export const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 export const normalizeEmail = (email: unknown) => typeof email === "string" ? email.trim().toLowerCase() : "";
-const isEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
+// A bare address only: no display names, brackets or quoting that could make two stored
+// "emails" deliver to the same inbox.
+const isEmail = (email: string) => /^[^\s@<>"(),;:\\[\]\x00-\x1f]+@[^\s@<>"(),;:\\[\]\x00-\x1f]+\.[^\s@<>"(),;:\\[\]\x00-\x1f]+$/.test(email) && email.length <= 254;
 
 export function validatePassword(input: unknown): string {
   const password = typeof input === "string" ? input : "";
@@ -82,10 +84,12 @@ async function startSession(userId: string, businessId: string, client?: pg.Pool
 export type EmailLink = { email: string; token: string };
 type Purpose = "verify_email" | "reset_password";
 
-// A new link replaces any earlier one for the same purpose, so only the latest email works.
+// A new verification link replaces the earlier one. Reset links don't: otherwise anyone who
+// knows an address could keep cancelling its owner's link by asking for another. Every reset
+// link is cleared once one is used, and the rate limits bound how many can exist.
 async function issueEmailToken(client: pg.PoolClient, userId: string, email: string, purpose: Purpose, minutes: number): Promise<EmailLink> {
   const token = randomBytes(32).toString("base64url");
-  await client.query("DELETE FROM email_tokens WHERE user_id = $1 AND purpose = $2", [userId, purpose]);
+  if (purpose === "verify_email") await client.query("DELETE FROM email_tokens WHERE user_id = $1 AND purpose = $2", [userId, purpose]);
   await client.query("INSERT INTO email_tokens (token_hash, user_id, purpose, email, expires_at) VALUES ($1, $2, $3, $4, now() + make_interval(mins => $5))",
     [hashToken(token), userId, purpose, email, minutes]);
   return { email, token };
@@ -205,8 +209,14 @@ export async function requestPasswordReset(input: unknown): Promise<EmailLink | 
 
 // Following the emailed link is the way back in after a lockout: it clears the failed sign-ins,
 // verifies the address (the link proved it), ends every other session and signs this one in.
+const invalidReset = () => new AuthError("invalid_token", "This reset link has expired or was already used. Request a new one.");
+
 export async function resetPassword(input: { token: unknown; password: unknown }) {
   const password = validatePassword(input.password);
+  // Look before hashing, so junk tokens can't make the server do scrypt work.
+  const live = typeof input.token === "string" && input.token.length <= 100
+    && (await query("SELECT 1 FROM email_tokens WHERE token_hash = $1 AND purpose = 'reset_password' AND expires_at > now()", [hashToken(input.token)])).rowCount;
+  if (!live) throw invalidReset();
   const passwordHash = await hashPassword(password);
   const result = await transaction(async client => {
     const claimed = await claimEmailToken(client, input.token, "reset_password");
@@ -222,25 +232,36 @@ export async function resetPassword(input: { token: unknown; password: unknown }
     await audit(client, account.business_id, account.id, "password.reset");
     return { token: await startSession(account.id, account.business_id, client), session: toSession(account) };
   });
-  if (!result) throw new AuthError("invalid_token", "This reset link has expired or was already used. Request a new one.");
+  if (!result) throw invalidReset();
   return result;
 }
 
 // --- Signed-in account changes ------------------------------------------------------------
 
-async function confirmPassword(session: Session, password: unknown): Promise<void> {
+// Returns the password hash that was checked, so the change can be made conditional on it.
+async function confirmPassword(session: Session, password: unknown): Promise<string> {
   const typed = typeof password === "string" ? password.slice(0, 200) : "";
   if (!typed) throw new AuthError("invalid_input", "Enter your current password.");
   const account = await checkPassword(session.email, typed);
   if (!account || account.id !== session.userId) throw new AuthError("wrong_password", "That password isn’t right.");
+  return account.password_hash;
+}
+
+// The checks above ran outside the change's transaction. If a reset or another change landed
+// in between (ending this session or replacing the password), the change must not go ahead.
+async function assertStillCurrent(client: pg.PoolClient, session: Session, token: string, checkedHash: string) {
+  const live = (await client.query("SELECT 1 FROM sessions WHERE token_hash = $1 AND user_id = $2 FOR UPDATE", [hashToken(token), session.userId])).rowCount;
+  const same = (await client.query("SELECT 1 FROM users WHERE id = $1 AND password_hash = $2 FOR UPDATE", [session.userId, checkedHash])).rowCount;
+  if (!live || !same) throw new AuthError("wrong_password", "Your password was just changed elsewhere. Sign in again and retry.");
 }
 
 // Keeps the session that made the change and signs out every other device.
 export async function changePassword(session: Session, currentToken: string, input: { currentPassword: unknown; newPassword: unknown }) {
   const next = validatePassword(input.newPassword);
-  await confirmPassword(session, input.currentPassword);
+  const checkedHash = await confirmPassword(session, input.currentPassword);
   const passwordHash = await hashPassword(next);
   await transaction(async client => {
+    await assertStillCurrent(client, session, currentToken, checkedHash);
     await client.query("UPDATE users SET password_hash = $2 WHERE id = $1", [session.userId, passwordHash]);
     await client.query("DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $2", [session.userId, hashToken(currentToken)]);
     await client.query("DELETE FROM email_tokens WHERE user_id = $1 AND purpose = 'reset_password'", [session.userId]);
@@ -250,17 +271,15 @@ export async function changePassword(session: Session, currentToken: string, inp
 
 // Deletes the user and every business they alone belong to, with its runs, routines, audit
 // events and AI usage. Businesses shared with other members (not possible yet) are kept.
-export async function deleteAccount(session: Session, password: unknown) {
-  await confirmPassword(session, password);
+export async function deleteAccount(session: Session, currentToken: string, password: unknown) {
+  const checkedHash = await confirmPassword(session, password);
   await transaction(async client => {
+    await assertStillCurrent(client, session, currentToken, checkedHash);
     const owned = (await client.query<{ business_id: string }>(
       `SELECT m.business_id FROM memberships m WHERE m.user_id = $1
        AND NOT EXISTS (SELECT 1 FROM memberships o WHERE o.business_id = m.business_id AND o.user_id <> $1)`, [session.userId])).rows;
-    for (const { business_id } of owned) {
-      // Row-level security on the cascaded tenant tables is keyed on this setting.
-      await client.query("SELECT set_config('app.business_id', $1, true)", [business_id]);
-      await client.query("DELETE FROM businesses WHERE id = $1", [business_id]);
-    }
+    // Foreign-key cascades run as the table owner, so row-level security doesn't block them.
+    for (const { business_id } of owned) await client.query("DELETE FROM businesses WHERE id = $1", [business_id]);
     await client.query("DELETE FROM users WHERE id = $1", [session.userId]);
     await client.query("DELETE FROM login_attempts WHERE email = $1", [session.email]);
   });

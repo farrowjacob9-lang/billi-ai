@@ -26,6 +26,7 @@ async function signUp(page: Page, email: string, business: string, { verify = tr
   await expect(page.getByRole("heading", { name: "Make room for your best work." })).toBeVisible();
   if (!verify) return;
   await page.goto(await emailedLink(email, "/verify-email"));
+  await page.getByRole("button", { name: "Confirm my email" }).click();
   await expect(page.getByRole("heading", { name: "Email confirmed." })).toBeVisible();
   await page.getByRole("link", { name: "Go to Billions" }).click();
   await expect(page.getByRole("heading", { name: "Make room for your best work." })).toBeVisible();
@@ -123,9 +124,12 @@ test("a new account can report straight away, and turns on the AI by confirming 
   await expect(page.getByText("We’ve sent a new link", { exact: false })).toBeVisible();
   const first = await emailedLink(email, "/verify-email", 1), second = await emailedLink(email, "/verify-email", 2);
   await page.goto(first);
+  await expect(page.getByRole("heading", { name: "Confirm your email." })).toBeVisible();
+  await page.getByRole("button", { name: "Confirm my email" }).click();
   await expect(page.getByRole("heading", { name: "We couldn’t confirm that." })).toBeVisible();
   await page.goto("about:blank"); // an emailed link opens a fresh page, not a same-page hash change
   await page.goto(second);
+  await page.getByRole("button", { name: "Confirm my email" }).click();
   await expect(page.getByRole("heading", { name: "Email confirmed." })).toBeVisible();
   expect(new URL(page.url()).hash, "the token is dropped from the address bar").toBe("");
   await page.getByRole("link", { name: "Go to Billions" }).click();

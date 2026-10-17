@@ -219,13 +219,14 @@ test("a password reset link signs in once, ends other sessions and lifts a locko
   assert.equal(audit.rowCount, 1);
 });
 
-test("reset links expire, are replaced by newer ones and can't be redeemed twice in parallel", { skip }, async () => {
+test("reset links expire, survive newer requests until one is used, and can't be redeemed twice in parallel", { skip }, async () => {
   const { session } = await signUp("reset-race@example.com");
   const first = await m.auth.requestPasswordReset("reset-race@example.com");
   const second = await m.auth.requestPasswordReset("reset-race@example.com");
-  await assert.rejects(m.auth.resetPassword({ token: first!.token, password: "a brand new passphrase" }), { code: "invalid_token" });
+  // A stranger asking for another link must not cancel the one the owner is about to use.
   const results = await Promise.allSettled([1, 2, 3].map(() => m.auth.resetPassword({ token: second!.token, password: "a brand new passphrase" })));
   assert.equal(results.filter(r => r.status === "fulfilled").length, 1);
+  await assert.rejects(m.auth.resetPassword({ token: first!.token, password: "a brand new passphrase" }), { code: "invalid_token" }, "using one link clears the others");
   const third = await m.auth.requestPasswordReset("reset-race@example.com");
   await expireTokens(session.userId);
   await assert.rejects(m.auth.resetPassword({ token: third!.token, password: "a brand new passphrase" }), { code: "invalid_token" });
@@ -250,8 +251,8 @@ test("deleting an account removes the user, their business and its data, and not
   await m.repo.takeAiCall(session.businessId, 10);
   const kept = await m.repo.saveRun(stay.businessId, stay.userId, createReport(SAMPLE_CSV, "theirs.csv", "pending", new Date().toISOString()));
 
-  await assert.rejects(m.auth.deleteAccount(session, "not my password"), { code: "wrong_password" });
-  await m.auth.deleteAccount(session, "correct horse battery");
+  await assert.rejects(m.auth.deleteAccount(session, token, "not my password"), { code: "wrong_password" });
+  await m.auth.deleteAccount(session, token, "correct horse battery");
 
   assert.equal(await m.auth.sessionFromToken(token), null);
   const left = await asOwner(async c => {
@@ -268,4 +269,17 @@ test("deleting an account removes the user, their business and its data, and not
   assert.deepEqual(left, { business: 0, runs: 0, routines: 0, audit: 0, usage: 0, user: 0 });
   assert.deepEqual((await m.repo.listRuns(stay.businessId)).map(r => r.id), [kept.id]);
   assert.ok(await signUp("leaving@example.com", "Back Again"), "the address can be used again");
+});
+
+test("a password change can't go through on a session that ended after its checks", { skip }, async () => {
+  const { token, session } = await signUp("stale@example.com");
+  await m.auth.endSession(token);
+  await assert.rejects(m.auth.changePassword(session, token, { currentPassword: "correct horse battery", newPassword: "a brand new passphrase" }), { code: "wrong_password" });
+  await assert.rejects(m.auth.deleteAccount(session, token, "correct horse battery"), { code: "wrong_password" });
+  assert.ok(await m.auth.logIn({ email: "stale@example.com", password: "correct horse battery" }), "nothing changed");
+});
+
+test("addresses with display names or brackets are refused", { skip }, async () => {
+  for (const email of ["x<me@example.com>", "a,b@example.com", "\"q\"@example.com", "me@exa mple.com"]) await assert.rejects(signUp(email), { code: "invalid_input" }, email);
+  assert.equal(await m.auth.requestPasswordReset("x<reset@example.com>"), null);
 });

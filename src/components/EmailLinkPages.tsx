@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { ArrowRight } from "lucide-react";
 import { AuthCard } from "@/components/AuthScreen";
 import { api, ApiError } from "@/lib/store";
@@ -49,22 +49,24 @@ export function ResetPasswordPage() {
   </AuthCard>;
 }
 
+// Confirming takes a click: mail scanners that open links (some run scripts) must not be
+// able to confirm an address on its owner's behalf.
 export function VerifyEmailPage() {
   const token = useLinkToken();
-  const [state, setState] = useState<"checking" | "done" | "failed">("checking");
+  const [state, setState] = useState<"ready" | "checking" | "done" | "failed">("ready");
   const [error, setError] = useState("");
-  const started = useRef(false);
 
-  useEffect(() => {
-    if (token === undefined || started.current) return;
-    started.current = true;
-    if (token === null) { setError("This link is incomplete. Open it from your email again."); setState("failed"); return; }
-    api("/api/auth/verify", { method: "POST", body: JSON.stringify({ token }) })
-      .then(() => setState("done"))
-      .catch(e => { setError(failure(e)); setState("failed"); });
-  }, [token]);
+  async function confirm() {
+    if (!token || state === "checking") return;
+    setState("checking");
+    try { await api("/api/auth/verify", { method: "POST", body: JSON.stringify({ token }) }); setState("done"); }
+    catch (e) { setError(failure(e)); setState("failed"); }
+  }
 
-  const title = state === "done" ? "Email confirmed" : state === "failed" ? "We couldn’t confirm that" : "Confirming your email";
-  const lede = state === "done" ? "Thanks. The AI assistant is on for your workspace." : state === "failed" ? error : "One moment…";
-  return <AuthCard title={title} lede={lede}>{state !== "checking" && <a className="primary-button auth-submit" href="/">Go to Billions <ArrowRight size={16} /></a>}</AuthCard>;
+  if (token === null) return <AuthCard title="This link is incomplete" lede="Open the link from your email again, or send a new one from the banner in Billions."><a className="primary-button auth-submit" href="/">Go to Billions <ArrowRight size={16} /></a></AuthCard>;
+  if (state === "done") return <AuthCard title="Email confirmed" lede="Thanks. The AI assistant is on for your workspace."><a className="primary-button auth-submit" href="/">Go to Billions <ArrowRight size={16} /></a></AuthCard>;
+  if (state === "failed") return <AuthCard title="We couldn’t confirm that" lede={error}><a className="primary-button auth-submit" href="/">Go to Billions <ArrowRight size={16} /></a></AuthCard>;
+  return <AuthCard title="Confirm your email" lede="One click and the AI assistant is on for your workspace.">
+    <button className="primary-button auth-submit" onClick={() => void confirm()} disabled={!token || state === "checking"}>{state === "checking" ? "One moment…" : "Confirm my email"} <ArrowRight size={16} /></button>
+  </AuthCard>;
 }

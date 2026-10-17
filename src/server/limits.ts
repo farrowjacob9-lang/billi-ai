@@ -13,13 +13,16 @@ export async function takeRateLimit(key: string, limit: number, windowSeconds: n
 
 export const LIMITS = {
   signupsPerIpPerHour: () => Number(process.env.BILLIONS_SIGNUPS_PER_IP_PER_HOUR) || 5,
-  signInsPerIpPer15Minutes: 30,
-  // Emailed links: per IP, and per address so one inbox can't be flooded.
+  signInsPerIpPer15Minutes: () => Number(process.env.BILLIONS_SIGNINS_PER_IP_PER_15_MINUTES) || 30,
+  // Emailed links: per IP, and per address so one inbox can't be flooded. Reset emails are also
+  // limited per (address, IP), so a stranger using up their share can't block the owner's.
   resetRequestsPerIpPerHour: 10,
-  resetEmailsPerAddressPerHour: 3,
+  resetEmailsPerAddressAndIpPerHour: 3,
+  resetEmailsPerAddressPerHour: 10,
   verifyEmailsPerUserPerHour: 3,
+  verifyEmailsPerUserPerDay: 6,
   // Token redemptions; guessing a 256-bit token is hopeless, this bounds password hashing work.
-  linkRedemptionsPerIpPer15Minutes: 20,
+  linkRedemptionsPerIpPer15Minutes: () => Number(process.env.BILLIONS_LINK_REDEMPTIONS_PER_IP_PER_15_MINUTES) || 20,
   aiCallsPerBusinessPerDay: () => Number(process.env.BILLIONS_AI_DAILY_LIMIT) || 100,
   // Bounds total spend however many businesses sign up.
   aiCallsPerDayGlobal: () => Number(process.env.BILLIONS_AI_GLOBAL_DAILY_LIMIT) || 2000,

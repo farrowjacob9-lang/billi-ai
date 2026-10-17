@@ -16,6 +16,8 @@ export function appUrl(): string | null {
 }
 
 export const emailConfigured = () => !!process.env.RESEND_API_KEY && !!process.env.EMAIL_FROM && !!appUrl();
+// Some email settings present but not all valid: a mistake, not a choice to run without email.
+export const emailMisconfigured = () => !emailConfigured() && !!(process.env.RESEND_API_KEY || process.env.EMAIL_FROM || process.env.BILLIONS_APP_URL);
 
 type Message = { to: string; subject: string; text: string };
 

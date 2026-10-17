@@ -1,14 +1,19 @@
 import type { Session } from "./auth.ts";
 import { aiConfigured, anonymousAiAllowed } from "./ai.ts";
 import { databaseConfigured } from "./db.ts";
-import { emailConfigured } from "./email.ts";
+import { emailConfigured, emailMisconfigured } from "./email.ts";
 import { clientIp, currentSession, HttpError } from "./http.ts";
 import { takeAiAllowance } from "./limits.ts";
 import type { Capabilities } from "../lib/store.ts";
 
 // Until its email is verified, an account gets reports but not the model, so a sign-up with
 // someone else's address can't spend. Without email set up there is no way to verify: no gate.
-export const aiAllowedFor = (session: Session) => session.emailVerified || !emailConfigured();
+// A half-finished email setup keeps the gate closed rather than quietly opening it.
+export const aiAllowedFor = (session: Session) => {
+  if (session.emailVerified || emailConfigured()) return session.emailVerified;
+  if (emailMisconfigured()) { console.error("[email] RESEND_API_KEY, EMAIL_FROM and an https BILLIONS_APP_URL are all needed; the AI stays off for unverified accounts"); return false; }
+  return true;
+};
 
 export async function capabilities(): Promise<Capabilities> {
   const session = await currentSession();

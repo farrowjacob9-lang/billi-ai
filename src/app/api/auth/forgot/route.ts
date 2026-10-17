@@ -11,9 +11,11 @@ export const POST = route(async request => {
   const body = await readJson(request, 4096);
   const email = normalizeEmail(body.email);
   if (!email) throw new HttpError(400, "invalid_input", "Enter the email you signed up with.");
-  if (!await takeRateLimit(`reset:ip:${await clientIp()}`, LIMITS.resetRequestsPerIpPerHour, 3600)) throw new HttpError(429, "rate_limited", "Too many reset requests from this network. Try again in an hour.");
+  const ip = await clientIp();
+  if (!await takeRateLimit(`reset:ip:${ip}`, LIMITS.resetRequestsPerIpPerHour, 3600)) throw new HttpError(429, "rate_limited", "Too many reset requests from this network. Try again in an hour.");
   after(async () => {
     try {
+      if (!await takeRateLimit(`reset:email-ip:${email}:${ip}`, LIMITS.resetEmailsPerAddressAndIpPerHour, 3600)) return;
       if (!await takeRateLimit(`reset:email:${email}`, LIMITS.resetEmailsPerAddressPerHour, 3600)) return;
       const link = await requestPasswordReset(email);
       if (link) await sendPasswordResetEmail(link);
