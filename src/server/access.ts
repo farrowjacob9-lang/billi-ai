@@ -1,16 +1,22 @@
 import type { Session } from "./auth.ts";
 import { aiConfigured, anonymousAiAllowed } from "./ai.ts";
 import { databaseConfigured } from "./db.ts";
+import { emailConfigured } from "./email.ts";
 import { clientIp, currentSession, HttpError } from "./http.ts";
 import { takeAiAllowance } from "./limits.ts";
 import type { Capabilities } from "../lib/store.ts";
+
+// Until its email is verified, an account gets reports but not the model, so a sign-up with
+// someone else's address can't spend. Without email set up there is no way to verify: no gate.
+export const aiAllowedFor = (session: Session) => session.emailVerified || !emailConfigured();
 
 export async function capabilities(): Promise<Capabilities> {
   const session = await currentSession();
   return {
     mode: databaseConfigured() ? "cloud" : "local",
-    ai: aiConfigured() && (session ? true : !databaseConfigured() && anonymousAiAllowed()),
-    user: session ? { email: session.email, businessName: session.businessName } : null,
+    ai: aiConfigured() && (session ? aiAllowedFor(session) : !databaseConfigured() && anonymousAiAllowed()),
+    email: databaseConfigured() && emailConfigured(),
+    user: session ? { email: session.email, businessName: session.businessName, emailVerified: session.emailVerified } : null,
   };
 }
 
@@ -31,6 +37,7 @@ export async function requireAiAccess(): Promise<Session | null> {
   if (!aiConfigured()) throw new HttpError(404, "ai_disabled", "No AI model is connected on this deployment.");
   const session = await currentSession();
   if (session) {
+    if (!aiAllowedFor(session)) throw new HttpError(403, "verify_email", "Confirm your email to turn on the AI assistant. Reports still work with the template summary.");
     const allowance = await takeAiAllowance(session.businessId);
     if (allowance === "business_limit") throw new HttpError(429, "ai_quota", "Today’s AI allowance for this business is used up. Reports still work with the template summary.");
     if (allowance === "global_limit") throw new HttpError(429, "ai_quota", "The AI assistant is resting until tomorrow. Reports still work with the template summary.");

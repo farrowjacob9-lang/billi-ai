@@ -4,8 +4,9 @@ import type { Report } from "@/lib/report";
 import type { Routine } from "@/lib/types";
 
 // What the server offers. Without DATABASE_URL the app stays a browser-only prototype.
-export type Capabilities = { mode: "local" | "cloud"; ai: boolean; user: { email: string; businessName: string } | null };
-export const LOCAL_CAPABILITIES: Capabilities = { mode: "local", ai: false, user: null };
+// `email` is whether this deployment can send account emails (verification, password reset).
+export type Capabilities = { mode: "local" | "cloud"; ai: boolean; email: boolean; user: { email: string; businessName: string; emailVerified: boolean } | null };
+export const LOCAL_CAPABILITIES: Capabilities = { mode: "local", ai: false, email: false, user: null };
 
 export class ApiError extends Error {
   readonly status: number;

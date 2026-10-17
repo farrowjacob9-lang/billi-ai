@@ -23,7 +23,7 @@ The initial CSV contract is `date,description,category,amount`. Dates use YYYY-M
 
 Status as of 17 Oct 2026. ✅ built and tested · ◐ partly · ○ not started.
 
-1. ✅ Authentication and business membership, with server-enforced tenant isolation from the first stored record. Email and password (scrypt), hashed session tokens, failed-login throttling; every tenant query filters on the session's business and runs under Postgres row-level security. Gaps: no email verification, password reset, invitations or business switching yet.
+1. ✅ Authentication and business membership, with server-enforced tenant isolation from the first stored record. Email and password (scrypt), hashed session tokens, failed-login throttling; every tenant query filters on the session's business and runs under Postgres row-level security. Email verification (gates the AI until confirmed), password reset by one-time emailed link, change password and account deletion are built. Gaps: invitations and business switching.
 2. ◐ PostgreSQL for runs, versioned routine definitions (insert-only rows with a `definition`) and audit records. No object storage: by decision, source files are never kept, so there is nothing to store yet. Outputs are regenerated from the stored report.
 3. ◐ Server-side schema and file validation and upload limits: the server re-validates and recalculates every CSV. Retention policies and signed file access are not built (no files are retained).
 4. ○ Durable execution. Reports finish in one request today, so there is no queue, run state machine or resumable work; build this alongside scheduled routines.
@@ -34,7 +34,7 @@ Status as of 17 Oct 2026. ✅ built and tested · ◐ partly · ○ not started.
 
 Correct integer-cent financial calculations; invalid records stop processing with actionable errors; original source is unchanged; checks distinguish input validation from output preparation; completed reports download correctly; run history survives refresh; routine configurations can be reused; production build and browser workflow pass.
 
-Production readiness additionally requires cross-tenant access tests (done: `tests/db.test.ts`, `tests/browser/accounts.spec.ts`), secure upload/storage tests, provider failure handling (done: failures, refusals and unverifiable replies fall back to the template), retention/deletion, durable execution and real authentication (done, without verification or reset). Local browser persistence is a prototype convenience, not an implementation of business security.
+Production readiness additionally requires cross-tenant access tests (done: `tests/db.test.ts`, `tests/browser/accounts.spec.ts`), secure upload/storage tests, provider failure handling (done: failures, refusals and unverifiable replies fall back to the template), retention/deletion, durable execution and real authentication (done, including verification and reset). Account deletion removes the business and all its data. Local browser persistence is a prototype convenience, not an implementation of business security.
 
 ## Deferred
 

@@ -1,6 +1,7 @@
 import { cookies, headers } from "next/headers";
 import { AuthError, SESSION_COOKIE, SESSION_DAYS, sessionFromToken, type Session } from "./auth.ts";
 import { databaseConfigured } from "./db.ts";
+import { emailConfigured } from "./email.ts";
 
 export class HttpError extends Error {
   readonly status: number;
@@ -11,7 +12,7 @@ export class HttpError extends Error {
 export const fail = (status: number, code: string, message: string) => Response.json({ error: { code, message } }, { status, headers: { "cache-control": "no-store" } });
 export const ok = (body: unknown, status = 200) => Response.json(body, { status, headers: { "cache-control": "no-store" } });
 
-const AUTH_STATUS: Record<AuthError["code"], number> = { invalid_input: 400, email_taken: 409, invalid_credentials: 401, rate_limited: 429 };
+const AUTH_STATUS: Record<AuthError["code"], number> = { invalid_input: 400, email_taken: 409, invalid_credentials: 401, wrong_password: 403, invalid_token: 400, rate_limited: 429 };
 
 // Wraps a route so every failure leaves in the same { error: { code, message } } envelope.
 export function route<A extends unknown[]>(handler: (request: Request, ...rest: A) => Promise<Response>) {
@@ -71,13 +72,20 @@ export async function clientIp(): Promise<string> {
   return h.get("x-real-ip")?.trim() || h.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
 }
 
+export const sessionToken = async () => (await cookies()).get(SESSION_COOKIE)?.value;
+
 export async function currentSession(): Promise<Session | null> {
   if (!databaseConfigured()) return null;
-  return sessionFromToken((await cookies()).get(SESSION_COOKIE)?.value);
+  return sessionFromToken(await sessionToken());
 }
 
 export function requireDatabase() {
   if (!databaseConfigured()) throw new HttpError(404, "accounts_disabled", "Accounts are not enabled on this deployment.");
+}
+
+export function requireEmail() {
+  requireDatabase();
+  if (!emailConfigured()) throw new HttpError(404, "email_disabled", "Email isn’t set up on this deployment yet. Contact support to recover your account.");
 }
 
 export async function requireSession(): Promise<Session> {

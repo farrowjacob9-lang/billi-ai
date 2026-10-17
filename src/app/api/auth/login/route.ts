@@ -9,5 +9,5 @@ export const POST = route(async request => {
   const { token, session } = await logIn({ email: body.email, password: body.password });
   await setSessionCookie(token);
   void Promise.all([pruneAuthTables(), pruneRateLimits()]).catch(() => undefined);
-  return ok({ user: { email: session.email, businessName: session.businessName } });
+  return ok({ user: { email: session.email, businessName: session.businessName, emailVerified: session.emailVerified } });
 });

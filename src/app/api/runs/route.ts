@@ -1,3 +1,4 @@
+import { aiAllowedFor } from "@/server/access";
 import { aiConfigured, writeNarrative } from "@/server/ai";
 import { takeAiAllowance } from "@/server/limits";
 import { HttpError, ok, readJson, requireSession, route } from "@/server/http";
@@ -25,7 +26,7 @@ export const POST = route(async request => {
   // A cancelled upload must not spend an AI call or be saved.
   const cancelled = () => { if (request.signal.aborted) throw new HttpError(499, "cancelled", "The report was cancelled."); };
   cancelled();
-  if (aiConfigured() && await takeAiAllowance(session.businessId) === "ok") {
+  if (aiConfigured() && aiAllowedFor(session) && await takeAiAllowance(session.businessId) === "ok") {
     const narrative = await writeNarrative(report, request.signal);
     if (narrative) report = { ...report, narrative, narrativeSource: "ai" as const };
   }

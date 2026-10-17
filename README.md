@@ -20,6 +20,7 @@ The app listens on port 3000. With no environment variables it runs as a browser
 | Browser-only | nothing | CSV processed in the browser; history and routines in local storage; template narrative and keyword chat helpers. |
 | Browser-only + Claude | `ANTHROPIC_API_KEY`, `BILLIONS_ANONYMOUS_AI=on` | As above, but the browser sends the calculated totals (never transactions) to the server, which asks Claude for the takeaway and chat replies. For demos: the per-IP limit is per server instance. |
 | Accounts | `DATABASE_URL` (+ optional `ANTHROPIC_API_KEY`) | Sign-in required. The server re-validates and recalculates each CSV, keeps the calculated report (never the file) in Postgres for that business, and meters Claude per business per day. |
+| Accounts + email | also `RESEND_API_KEY`, `EMAIL_FROM` (and `BILLIONS_APP_URL` off Vercel) | Adds email verification and password reset. New accounts can run reports at once but get Claude only after confirming their email. |
 
 ## What works
 
@@ -29,6 +30,7 @@ The app listens on port 3000. With no environment variables it runs as a browser
 - Weekly income, expense, net-movement and category summaries; daily chart and accessible table.
 - Expandable checks, Markdown report download, run history with search, per-report delete and clearing, routines with create/delete/reuse. A session that expires mid-use returns to the sign-in screen.
 - **Claude, without invented numbers.** The model sees only the calculated totals (largest 15 categories plus one "other" line) and never writes a figure: it cites placeholders such as `{income}` or `{category:Rent}` and code fills in the exact value (`src/lib/ai/verify.ts`). A reply containing any digit, number word, currency or percent sign, comparison with another period, or the wrong direction of net movement is discarded and the template is used instead. The report labels which one you are reading.
+- **Account recovery.** "Forgot password?" emails a one-time link (30 minutes); following it sets a new password, verifies the address, lifts a sign-in lockout, ends every other session and signs in. The reset request answers identically whether or not the email has an account, and looks it up after responding. Sign-up emails a verification link (24 hours). Links carry the token in the URL fragment, so it never reaches server logs or a Referer; only a SHA-256 of each token is stored and redeeming deletes it, so a link works once. Settings: change password (signs out other devices) and delete account (the user, their business and all of its data). Draft Privacy Policy and Terms at `/privacy` and `/terms`; fill in `src/lib/legal.ts` and get them reviewed before launch.
 - **Accounts and tenant isolation.** Email and password sign-up creates a business workspace. Sessions are random tokens in an httpOnly cookie, stored only as SHA-256 hashes. Sign-ins are throttled per email (atomically, so parallel guesses don't slip through) and per IP; sign-ups per IP; password hashing is concurrency-capped. Model spend is capped per business and across the deployment per day. Runs, routines, audit events and AI usage are filtered by business in every query and also guarded by Postgres row-level security.
 
 Select **Try this report** to start without uploading a file. The sample contains AUD 24,350 income, AUD 8,290 expenses and AUD 16,060 net movement across 12 transactions.
@@ -74,7 +76,7 @@ npm run test:e2e    # builds, then runs the browser tests
 ```
 
 - `TEST_DATABASE_URL` is a superuser or owner connection. Each run creates a throwaway database and a no-BYPASSRLS role, proves one business cannot read, change or delete another's data (even through SQL that omits the business filter), then drops it.
-- `npm run test:e2e` starts a fake Anthropic server and the production build in browser-only mode and in browser-only + Claude mode. Set `E2E_DATABASE_URL` (a migrated database, connected as the app role) to also run the accounts tests. No real API key or spend is involved.
+- `npm run test:e2e` starts a fake Anthropic server and the production build in browser-only mode and in browser-only + Claude mode. Set `E2E_DATABASE_URL` (a migrated database, connected as the app role) to also run the accounts tests, which use a fake Resend server (`tests/fake-resend.ts`) to follow emailed links. No real API key or spend is involved.
 - Browser tests use `/usr/bin/chromium` when present, or set `CHROMIUM_EXECUTABLE`. Elsewhere, `npx playwright install chromium`.
 
 The scope and next production work are in [docs/MVP.md](docs/MVP.md).
@@ -83,6 +85,6 @@ The scope and next production work are in [docs/MVP.md](docs/MVP.md).
 
 Import `farrowjacob9-lang/billi-ai` into Vercel with the Next.js preset, root directory `./`, Node.js 24.x and the default build command. With no environment variables it deploys the browser-only prototype.
 
-To turn on accounts and Claude, add in **Project → Settings → Environment Variables** (mark the secrets Sensitive): `DATABASE_URL` (app role, pooled URL), `ANTHROPIC_API_KEY`, and optionally `BILLIONS_AI_DAILY_LIMIT` and `BILLIONS_AI_GLOBAL_DAILY_LIMIT`. Per-IP limits rely on Vercel's `x-real-ip`; on another host, put a proxy in front that sets it. Run the migration and grants above against the database first. Leave `BILLIONS_ANONYMOUS_AI` unset in production.
+To turn on accounts and Claude, add in **Project → Settings → Environment Variables** (mark the secrets Sensitive): `DATABASE_URL` (app role, pooled URL), `ANTHROPIC_API_KEY`, `RESEND_API_KEY` and `EMAIL_FROM`, and optionally `BILLIONS_AI_DAILY_LIMIT` and `BILLIONS_AI_GLOBAL_DAILY_LIMIT`. Per-IP limits rely on Vercel's `x-real-ip`; on another host, put a proxy in front that sets it. Run the migration and grants above against the database first. Leave `BILLIONS_ANONYMOUS_AI` unset in production.
 
 After deploying: create a workspace, run **Try this report**, check the takeaway says "Written by Claude · figures verified" (when a key is set) and the totals match the sample above, download the report, sign in from a second browser to confirm the history is there, then check the mobile navigation.

@@ -21,6 +21,7 @@ export function modeCopy(caps: Capabilities) {
       ["Report narrative", caps.ai ? "Claude, figures verified" : "Deterministic template"],
       ["Currency", "AUD"],
       ["Accounts & cloud storage", cloud ? caps.user!.email : "Not connected"],
+      ...(cloud && caps.email ? [["Email", caps.user!.emailVerified ? "Confirmed" : "Not confirmed yet"] as [string, string]] : []),
     ],
     footnote: cloud
       ? "Report summaries stay in your business workspace until you clear them. Your uploaded files are never kept."

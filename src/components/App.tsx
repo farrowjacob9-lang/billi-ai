@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, Menu, Settings2 } from "lucide-react";
-import { AppDialog } from "@/components/AppDialog";
+import { ChevronRight, MailCheck, Menu, Settings2 } from "lucide-react";
+import { AppDialog, type AccountActions } from "@/components/AppDialog";
 import { HistoryView, RoutinesView } from "@/components/ListViews";
 import { Sidebar } from "@/components/Sidebar";
 import { Toast } from "@/components/ui";
@@ -156,13 +156,40 @@ export function App({ caps }: { caps: Capabilities }) {
     catch { setToast("History couldn’t be cleared. Please try again."); }
   }
 
+  async function resendVerification() {
+    try {
+      const { verified } = await api<{ sent: boolean; verified: boolean }>("/api/auth/verify/resend", { method: "POST" });
+      if (verified) { window.location.reload(); return; }
+      setToast(`We’ve sent a new link to ${caps.user?.email}. It works once and expires in 24 hours.`);
+    } catch (e) { setToast(e instanceof ApiError ? e.message : "The link couldn’t be sent. Please try again."); }
+  }
+
+  const failure = (e: unknown) => e instanceof ApiError ? e.message : "We couldn’t reach Billions. Check your connection and try again.";
+  const account: AccountActions | undefined = caps.user ? {
+    async changePassword(currentPassword, newPassword) {
+      try {
+        await api("/api/account/password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) });
+        setModal(null); setToast("Password changed. Every other device has been signed out.");
+        return null;
+      } catch (e) { return failure(e); }
+    },
+    async deleteAccount(password) {
+      try {
+        await api("/api/account/delete", { method: "POST", body: JSON.stringify({ password }) });
+        window.location.replace("/");
+        return null;
+      } catch (e) { return failure(e); }
+    },
+  } : undefined;
+
   async function signOut() {
     try { await api("/api/auth/logout", { method: "POST" }); } catch { /* the session cookie is cleared server-side either way */ }
     window.location.reload();
   }
 
   const runSample = () => void runCsv(SAMPLE_CSV, "sample-week.csv");
-  if (signedOut) return <AuthScreen notice={sessionEnded ? "Your session has ended. Sign in again to pick up where you left off." : undefined} />;
+  if (signedOut) return <AuthScreen canEmail={caps.email} notice={sessionEnded ? "Your session has ended. Sign in again to pick up where you left off." : undefined} />;
+  const unverified = caps.email && caps.user && !caps.user.emailVerified;
   const title = view === "routines" ? "Your routines" : view === "history" ? "Run history" : "Overview";
 
   return <div className="app-shell">
@@ -172,6 +199,7 @@ export function App({ caps }: { caps: Capabilities }) {
     <main className="main-shell">
       <header className="topbar"><div className="breadcrumb"><button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMobileNav(true)}><Menu size={20} /></button><button className="breadcrumb-link" onClick={() => navigate("workspace")}>Workspace</button><ChevronRight size={14} /><strong>{title}</strong></div><div className="topbar-right"><span className="prototype-badge"><span /> {copy.badge}</span><button className="icon-button" aria-label="Workspace settings" onClick={() => setModal("settings")}><Settings2 size={18} /></button></div></header>
       <div className="page-content">
+        {unverified && <div className="verify-banner" role="status"><MailCheck size={18} /><p>Confirm your email to turn on the AI assistant. We sent a link to <strong>{caps.user!.email}</strong>. Reports work in the meantime.</p><button className="secondary-button" onClick={() => void resendVerification()}>Send a new link</button></div>}
         {view === "workspace" ? <WorkspaceView report={report} preview={preview} messages={messages} busy={busy} replying={replying} stage={stage} error={error} privacyNote={copy.privacyNote} modeLabel={copy.modeLabel}
           onPickFile={() => fileInput.current?.click()} onUpload={file => void upload(file)} onRunSample={runSample} onCancel={() => { cancelRun(); setToast("Report cancelled. Your file is unchanged."); }} onDismissError={() => setError(null)}
           onSend={text => void send(text)} onDownloadReport={() => { const r = report || preview; download(`billions-report-${r.startDate}.md`, reportMarkdown(r), "text/markdown"); }}
@@ -182,7 +210,7 @@ export function App({ caps }: { caps: Capabilities }) {
     </main>
 
     <input className="sr-only" type="file" accept=".csv,text/csv" aria-label="Upload weekly CSV" ref={fileInput} onChange={e => { const file = e.target.files?.[0]; if (file) void upload(file); e.target.value = ""; }} />
-    <AppDialog modal={modal} settings={copy.settings} onClose={() => setModal(null)} onSaveRoutine={saveRoutine} onManageHistory={() => { setModal(null); navigate("history"); }} onSignOut={caps.user ? () => void signOut() : undefined} />
+    <AppDialog modal={modal} settings={copy.settings} businessName={copy.workspaceName} onClose={() => setModal(null)} onOpen={setModal} onSaveRoutine={saveRoutine} onManageHistory={() => { setModal(null); navigate("history"); }} onSignOut={caps.user ? () => void signOut() : undefined} account={account} />
     {toast && <Toast text={toast} onDismiss={() => setToast("")} />}
   </div>;
 }
