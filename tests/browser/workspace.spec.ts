@@ -6,8 +6,13 @@ test("sample report, checks, download, routine and history work across refresh",
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Make room for your best work." })).toBeVisible();
   await page.screenshot({ path: "/tmp/billions-desktop.png", fullPage: true });
-  await page.getByRole("button", { name: "Try this report" }).click();
+  // The conversation has the page to itself until a report exists, then shares it.
+  await expect(page.getByRole("region", { name: "Report" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Try a sample report" }).click();
   await expect(page.getByRole("button", { name: "Download report" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Report" })).toBeVisible();
+  const [chat, output] = await Promise.all([page.getByRole("region", { name: "Conversation workspace" }).boundingBox(), page.getByRole("region", { name: "Report" }).boundingBox()]);
+  expect(output!.x).toBeGreaterThan(chat!.x + chat!.width - 1);
   await expect(page.getByText("$16,060", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "12 records checked. Totals reconciled." }).click();
   await expect(page.getByText("Original file unchanged", { exact: true })).toBeVisible();
@@ -96,7 +101,7 @@ test("mobile navigation, dialog and report fit the viewport", async ({ page }) =
 
 test("cancelling an in-progress report does not save a completed run", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Try this report" }).click();
+  await page.getByRole("button", { name: "Try a sample report" }).click();
   await page.getByRole("button", { name: "Cancel report" }).click();
   await expect(page.getByRole("button", { name: "Download report" })).toHaveCount(0);
   await page.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();

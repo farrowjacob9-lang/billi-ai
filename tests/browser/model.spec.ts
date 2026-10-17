@@ -5,7 +5,7 @@ const FAKE = "http://127.0.0.1:4010/requests";
 test("a verified model narrative replaces the template and says so", async ({ page, request }) => {
   await page.goto("/");
   await expect(page.getByText("Only the calculated totals are sent to Claude.")).toBeVisible();
-  await page.getByRole("button", { name: "Try this report" }).click();
+  await page.getByRole("button", { name: "Try a sample report" }).click();
   await expect(page.getByText("Written by Claude · figures verified")).toBeVisible();
   await expect(page.getByText("A strong week: 12 transactions brought in $24,350.00 against $8,290.00 of expenses, a net inflow of $16,060.00. Operations led spending at $3,600.00.")).toBeVisible();
   const downloading = page.waitForEvent("download");
@@ -23,7 +23,7 @@ test("a verified model narrative replaces the template and says so", async ({ pa
 
 test("chat answers from the totals, and a reply with invented figures is never shown", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Try this report" }).click();
+  await page.getByRole("button", { name: "Try a sample report" }).click();
   await expect(page.getByRole("button", { name: "Download report" })).toBeVisible();
   const composer = page.getByLabel("Message Billions");
   await composer.fill("Where did my money go?");

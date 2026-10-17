@@ -16,7 +16,6 @@ import { AuthScreen } from "@/components/AuthScreen";
 import { api, ApiError, cloudStore, localStore, SIGNED_OUT_EVENT, type Capabilities } from "@/lib/store";
 import type { Message, Modal, Routine, UiError, View } from "@/lib/types";
 
-const preview = createReport(SAMPLE_CSV, "sample-week.csv", "sample", "2026-10-12T08:00:00Z");
 const pause = () => new Promise(resolve => setTimeout(resolve, 180));
 const MAX_BYTES = 2 * 1024 * 1024;
 
@@ -200,9 +199,9 @@ export function App({ caps }: { caps: Capabilities }) {
       <header className="topbar"><div className="breadcrumb"><button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMobileNav(true)}><Menu size={20} /></button><button className="breadcrumb-link" onClick={() => navigate("workspace")}>Workspace</button><ChevronRight size={14} /><strong>{title}</strong></div><div className="topbar-right"><span className="prototype-badge"><span /> {copy.badge}</span><button className="icon-button" aria-label="Workspace settings" onClick={() => setModal("settings")}><Settings2 size={18} /></button></div></header>
       <div className="page-content">
         {unverified && <div className="verify-banner" role="status"><MailCheck size={18} /><p>Confirm your email to turn on the AI assistant. We sent a link to <strong>{caps.user!.email}</strong>. Reports work in the meantime.</p><button className="secondary-button" onClick={() => void resendVerification()}>Send a new link</button></div>}
-        {view === "workspace" ? <WorkspaceView report={report} preview={preview} messages={messages} busy={busy} replying={replying} stage={stage} error={error} privacyNote={copy.privacyNote} modeLabel={copy.modeLabel}
+        {view === "workspace" ? <WorkspaceView report={report} messages={messages} busy={busy} replying={replying} stage={stage} error={error} privacyNote={copy.privacyNote} modeLabel={copy.modeLabel}
           onPickFile={() => fileInput.current?.click()} onUpload={file => void upload(file)} onRunSample={runSample} onCancel={() => { cancelRun(); setToast("Report cancelled. Your file is unchanged."); }} onDismissError={() => setError(null)}
-          onSend={text => void send(text)} onDownloadReport={() => { const r = report || preview; download(`billions-report-${r.startDate}.md`, reportMarkdown(r), "text/markdown"); }}
+          onSend={text => void send(text)} onDownloadReport={() => { if (report) download(`billions-report-${report.startDate}.md`, reportMarkdown(report), "text/markdown"); }}
           onDownloadSample={() => download("billions-sample.csv", SAMPLE_CSV, "text/csv")} onSaveRoutine={() => setModal("routine")} onViewRoutines={() => navigate("routines")} />
           : view === "history" ? <HistoryView runs={runs} storageNote={copy.storageNote} onOpen={run => openRun(run, true)} onDelete={run => void deleteRun(run)} onClear={() => void clearHistory()} onRunSample={runSample} />
           : <RoutinesView routines={routines} storageNote={copy.storageNote} banner={copy.routinesBanner} onCreate={() => setModal("routine")} onDelete={routine => void deleteRoutine(routine)} onRun={() => fileInput.current?.click()} />}

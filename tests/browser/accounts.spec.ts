@@ -46,7 +46,7 @@ async function signOut(page: Page) {
 test("signed-out visitors see only the sign-in screen and the API refuses them", async ({ page, request }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Welcome back." })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Try this report" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Try a sample report" })).toHaveCount(0);
   for (const path of ["/api/runs", "/api/routines"]) expect((await request.get(path)).status()).toBe(401);
   expect((await request.post("/api/chat", { data: { question: "hi" } })).status()).toBe(401);
 });
@@ -55,7 +55,7 @@ test("a business's reports and routines persist on the server and stay private t
   const a = unique(), b = unique();
   await signUp(page, a, "Harbour Studio");
   await expect(page.getByText("Reports are saved to Harbour Studio only.", { exact: false })).toBeVisible();
-  await page.getByRole("button", { name: "Try this report" }).click();
+  await page.getByRole("button", { name: "Try a sample report" }).click();
   await expect(page.getByText("Written by Claude · figures verified")).toBeVisible();
   await page.getByRole("button", { name: "Save routine", exact: true }).click();
   await page.getByLabel("Routine name").fill("Harbour Monday snapshot");
@@ -87,7 +87,7 @@ test("a business's reports and routines persist on the server and stay private t
 
 test("an ended session returns to the sign-in screen, and single reports can be deleted", async ({ page, context }) => {
   await signUp(page, unique(), "Expiry Co");
-  await page.getByRole("button", { name: "Try this report" }).click();
+  await page.getByRole("button", { name: "Try a sample report" }).click();
   await expect(page.getByRole("button", { name: "Download report" })).toBeVisible();
   await page.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();
   await page.getByRole("button", { name: /^Delete report sample-week\.csv/ }).click();
@@ -95,8 +95,8 @@ test("an ended session returns to the sign-in screen, and single reports can be 
   expect(await page.evaluate(async () => (await (await fetch("/api/runs")).json()).runs.length)).toBe(0);
 
   await context.clearCookies();
-  await page.getByRole("navigation").getByRole("button", { name: /Overview/ }).click();
-  await page.getByRole("button", { name: /A little curious/ }).click();
+  await page.getByRole("button", { name: /^New conversation/ }).click();
+  await page.getByRole("button", { name: "Try a sample report" }).click();
   await expect(page.getByRole("heading", { name: "Welcome back." })).toBeVisible();
   await expect(page.getByText("Your session has ended.", { exact: false })).toBeVisible();
 });
@@ -115,7 +115,7 @@ test("a new account can report straight away, and turns on the AI by confirming 
   const email = unique();
   await signUp(page, email, "Unverified Co", { verify: false });
   await expect(page.getByText("Confirm your email to turn on the AI assistant.")).toBeVisible();
-  await page.getByRole("button", { name: "Try this report" }).click();
+  await page.getByRole("button", { name: "Try a sample report" }).click();
   await expect(page.getByText("Template summary")).toBeVisible();
   expect((await page.evaluate(async () => (await fetch("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question: "hi" }) })).json())).error.code).toBe("verify_email");
 
@@ -130,7 +130,7 @@ test("a new account can report straight away, and turns on the AI by confirming 
   expect(new URL(page.url()).hash, "the token is dropped from the address bar").toBe("");
   await page.getByRole("link", { name: "Go to Billions" }).click();
   await expect(page.getByText("Confirm your email to turn on the AI assistant.")).toHaveCount(0);
-  await page.getByRole("button", { name: "Try this report" }).click();
+  await page.getByRole("button", { name: "Try a sample report" }).click();
   await expect(page.getByText("Written by Claude · figures verified")).toBeVisible();
 });
 
@@ -185,7 +185,7 @@ test("an unknown email gets the same reset answer and no email", async ({ page }
 test("settings change the password, link the legal pages, and delete the account", async ({ page, browser }) => {
   const email = unique();
   await signUp(page, email, "Leaving Co");
-  await page.getByRole("button", { name: "Try this report" }).click();
+  await page.getByRole("button", { name: "Try a sample report" }).click();
   await expect(page.getByRole("button", { name: "Download report" })).toBeVisible();
   const other = await browser.newContext();
   const elsewhere = await other.newPage();
