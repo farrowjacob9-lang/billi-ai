@@ -93,9 +93,22 @@ test("one business never sees, changes or deletes another business's work", { sk
   assert.deepEqual(await m.repo.listRuns(b.businessId), []);
   assert.deepEqual(await m.repo.listRoutines(b.businessId), []);
   assert.equal(await m.repo.deleteRoutine(b.businessId, b.userId, routine.id), false);
+  assert.equal(await m.repo.deleteRun(b.businessId, b.userId, run.id), false);
+  assert.equal(await m.repo.deleteRun(a.businessId, a.userId, "not-a-uuid"), false);
   assert.equal(await m.repo.clearRuns(b.businessId, b.userId), 0);
   assert.equal((await m.repo.listRuns(a.businessId)).length, 1);
   assert.equal((await m.repo.listRoutines(a.businessId)).length, 1);
+});
+
+test("a business can delete one report and keep the rest", { skip }, async () => {
+  const a = (await signUp("delete-one@example.com", "A")).session;
+  const keep = await m.repo.saveRun(a.businessId, a.userId, createReport(SAMPLE_CSV, "keep.csv", "pending", new Date().toISOString()));
+  const drop = await m.repo.saveRun(a.businessId, a.userId, createReport(SAMPLE_CSV, "drop.csv", "pending", new Date().toISOString()));
+  assert.equal(await m.repo.deleteRun(a.businessId, a.userId, drop.id), true);
+  assert.equal(await m.repo.deleteRun(a.businessId, a.userId, drop.id), false, "a second delete finds nothing");
+  assert.deepEqual((await m.repo.listRuns(a.businessId)).map(r => r.id), [keep.id]);
+  const audit = await m.db.withTenant(a.businessId, client => client.query("SELECT 1 FROM audit_events WHERE action = 'run.deleted' AND subject_id = $1", [drop.id]));
+  assert.equal(audit.rowCount, 1);
 });
 
 test("row-level security holds even when a query forgets the business filter", { skip }, async () => {

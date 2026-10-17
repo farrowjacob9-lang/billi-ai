@@ -5,6 +5,7 @@ import type { Routine } from "../lib/types.ts";
 // Tenant data access. Every function takes the business from the server-side session,
 // filters on it explicitly, and runs under row-level security as a second guard.
 const RECENT_LIMIT = 30;
+const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
 async function audit(client: { query: (text: string, params: unknown[]) => Promise<unknown> }, businessId: string, userId: string, action: string, subjectId: string | null = null) {
   await client.query("INSERT INTO audit_events (business_id, user_id, action, subject_id) VALUES ($1, $2, $3, $4)", [businessId, userId, action, subjectId]);
@@ -24,6 +25,15 @@ export async function saveRun(businessId: string, userId: string, report: Report
       [id, businessId, userId, stored.fileName, stored.startDate, stored.endDate, stored.rowCount, JSON.stringify(stored), stored.createdAt]);
     await audit(client, businessId, userId, "run.created", id);
     return stored;
+  });
+}
+
+export async function deleteRun(businessId: string, userId: string, id: string): Promise<boolean> {
+  if (!isUuid(id)) return false;
+  return withTenant(businessId, async client => {
+    const { rowCount } = await client.query("DELETE FROM runs WHERE id = $1 AND business_id = $2", [id, businessId]);
+    if (rowCount) await audit(client, businessId, userId, "run.deleted", id);
+    return !!rowCount;
   });
 }
 
@@ -55,7 +65,7 @@ export async function createRoutine(businessId: string, userId: string, name: st
 }
 
 export async function deleteRoutine(businessId: string, userId: string, id: string): Promise<boolean> {
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return false;
+  if (!isUuid(id)) return false;
   return withTenant(businessId, async client => {
     const { rowCount } = await client.query("DELETE FROM routines WHERE id = $1 AND business_id = $2", [id, businessId]);
     if (rowCount) await audit(client, businessId, userId, "routine.deleted", id);

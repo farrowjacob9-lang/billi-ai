@@ -43,10 +43,41 @@ test("real uploaded data drives calculations, errors stop invalid reports", asyn
   await expect(page.getByText(/Your expenses total \$50.25/)).toBeVisible();
   await page.getByLabel("Upload weekly CSV").setInputFiles({ name: "invalid.csv", mimeType: "text/csv", buffer: Buffer.from("date,amount\n2026-10-05,10") });
   await expect(page.getByRole("region", { name: "Conversation workspace" }).getByRole("alert")).toContainText("Missing description, category columns");
+  await expect(page.getByRole("region", { name: "Conversation workspace" }).getByRole("alert")).toContainText("Let’s check that file.");
   await expect(page.getByRole("button", { name: "Download report" })).toHaveCount(0);
   await page.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();
   await expect(page.getByRole("button", { name: /my-week.csv/ }).last()).toBeVisible();
   await expect(page.getByRole("button", { name: /invalid.csv/ })).toHaveCount(0);
+});
+
+test("the app has icons, and the logo and breadcrumb return to Overview without a reload", async ({ page, request }) => {
+  for (const path of ["/favicon.ico", "/icon.svg", "/apple-icon.png"]) expect((await request.get(path)).status(), path).toBe(200);
+  await page.goto("/");
+  await expect(page.locator("link[rel=icon]").first()).toHaveAttribute("href", /favicon\.ico|icon/);
+  await page.evaluate(() => { (window as unknown as { marker: boolean }).marker = true; });
+  await page.getByRole("navigation").getByRole("button", { name: /Routines/ }).click();
+  await page.getByRole("button", { name: "Workspace", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Make room for your best work." })).toBeVisible();
+  await page.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();
+  await page.getByRole("link", { name: "Billions overview" }).click();
+  await expect(page.getByRole("heading", { name: "Make room for your best work." })).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { marker?: boolean }).marker)).toBe(true);
+  await expect(page.locator(".workspace-picker svg")).toHaveCount(0);
+});
+
+test("one report can be deleted from run history, leaving the rest", async ({ page }) => {
+  await page.goto("/");
+  for (const name of ["first.csv", "second.csv"]) {
+    await page.getByLabel("Upload weekly CSV").setInputFiles({ name, mimeType: "text/csv", buffer: Buffer.from("date,description,category,amount\n2026-10-05,Consulting,Sales,100.00") });
+    await expect(page.getByRole("button", { name: "Download report" })).toBeVisible();
+  }
+  await page.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();
+  await page.getByRole("button", { name: /^Delete report first\.csv/ }).click();
+  await expect(page.getByText("Report deleted.")).toBeVisible();
+  await page.reload();
+  await page.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();
+  await expect(page.getByRole("button", { name: /second\.csv/ }).last()).toBeVisible();
+  await expect(page.getByRole("button", { name: /first\.csv/ })).toHaveCount(0);
 });
 
 test("mobile navigation, dialog and report fit the viewport", async ({ page }) => {

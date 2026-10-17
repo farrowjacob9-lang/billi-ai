@@ -27,7 +27,7 @@ The app listens on port 3000. With no environment variables it runs as a browser
 - Sample data or real CSV upload, including drag and drop (up to 2 MB and 10,000 transactions).
 - Strict column, date, record and currency validation. Financial calculations use integer cents.
 - Weekly income, expense, net-movement and category summaries; daily chart and accessible table.
-- Expandable checks, Markdown report download, run history with search and clearing, routines with create/delete/reuse.
+- Expandable checks, Markdown report download, run history with search, per-report delete and clearing, routines with create/delete/reuse. A session that expires mid-use returns to the sign-in screen.
 - **Claude, without invented numbers.** The model sees only the calculated totals (largest 15 categories plus one "other" line) and never writes a figure: it cites placeholders such as `{income}` or `{category:Rent}` and code fills in the exact value (`src/lib/ai/verify.ts`). A reply containing any digit, number word, currency or percent sign, comparison with another period, or the wrong direction of net movement is discarded and the template is used instead. The report labels which one you are reading.
 - **Accounts and tenant isolation.** Email and password sign-up creates a business workspace. Sessions are random tokens in an httpOnly cookie, stored only as SHA-256 hashes. Sign-ins are throttled per email (atomically, so parallel guesses don't slip through) and per IP; sign-ups per IP; password hashing is concurrency-capped. Model spend is capped per business and across the deployment per day. Runs, routines, audit events and AI usage are filtered by business in every query and also guarded by Postgres row-level security.
 

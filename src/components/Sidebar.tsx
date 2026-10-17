@@ -1,4 +1,4 @@
-import { ChevronDown, History, LayoutGrid, MessageSquare, Plus, Settings2, Sparkles, Zap } from "lucide-react";
+import { History, LayoutGrid, MessageSquare, Plus, Settings2, Sparkles, Zap } from "lucide-react";
 import { NavItem } from "@/components/ui";
 import type { Report } from "@/lib/report";
 import type { View } from "@/lib/types";
@@ -13,8 +13,8 @@ export function Sidebar({ view, open, runs, routineCount, workspaceName, workspa
   return <>
     {open && <button className="nav-backdrop" aria-label="Close navigation" onClick={onClose} />}
     <aside className={`sidebar ${open ? "mobile-open" : ""}`} aria-label="Main navigation">
-      <a className="brand" href="/" aria-label="Billions home"><span className="brand-mark">b<span>.</span></span>billions<span className="brand-dot">®</span></a>
-      <button className="workspace-picker" onClick={onSettings}><span className="workspace-avatar">{workspaceName.charAt(0).toUpperCase() || "B"}<span /></span><span>{workspaceName}<small>{workspaceDetail}</small></span><ChevronDown size={15} /></button>
+      <a className="brand" href="/" aria-label="Billions overview" onClick={e => { e.preventDefault(); onNavigate("workspace"); }}><span className="brand-mark">b<span>.</span></span>billions<span className="brand-dot">®</span></a>
+      <button className="workspace-picker" onClick={onSettings}><span className="workspace-avatar">{workspaceName.charAt(0).toUpperCase() || "B"}<span /></span><span>{workspaceName}<small>{workspaceDetail}</small></span></button>
       <button className="new-chat" onClick={onNewConversation}><Plus size={18} /> New conversation <span>↗</span></button>
       <div className="nav-label">WORKSPACE</div>
       <nav>

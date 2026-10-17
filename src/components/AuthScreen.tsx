@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { api, ApiError } from "@/lib/store";
 
-export function AuthScreen() {
+export function AuthScreen({ notice }: { notice?: string }) {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,6 +32,7 @@ export function AuthScreen() {
       <a className="brand auth-brand" href="/" aria-label="Billions home"><span className="brand-mark">b<span>.</span></span>billions<span className="brand-dot">®</span></a>
       <h1>{signup ? "Set up your business workspace" : "Welcome back"}<span>.</span></h1>
       <p className="auth-lede">{signup ? "Weekly reports with every number checked, saved to your business." : "Sign in to pick up your reports and routines."}</p>
+      {notice && !error && <div className="info-card" role="status">{notice}</div>}
       <form onSubmit={submit} noValidate={false}>
         {signup && <><label htmlFor="business-name">Business name</label><input id="business-name" value={businessName} onChange={e => setBusinessName(e.target.value)} maxLength={80} required autoComplete="organization" /></>}
         <label htmlFor="email">Email</label><input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} maxLength={254} required autoComplete="email" />

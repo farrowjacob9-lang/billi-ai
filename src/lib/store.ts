@@ -13,11 +13,15 @@ export class ApiError extends Error {
   constructor(message: string, status: number, code: string) { super(message); this.status = status; this.code = code; }
 }
 
+// Fired when any API call finds the session gone, so the app can return to the sign-in screen.
+export const SIGNED_OUT_EVENT = "billions:signed-out";
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { ...init, headers: { "content-type": "application/json", ...init?.headers }, credentials: "same-origin" });
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     const error = (body as { error?: { code?: string; message?: string } } | null)?.error;
+    if (response.status === 401 && error?.code === "signed_out") window.dispatchEvent(new Event(SIGNED_OUT_EVENT));
     throw new ApiError(error?.message || "Something went wrong. Please try again.", response.status, error?.code || "unknown");
   }
   return body as T;
@@ -31,6 +35,7 @@ export interface Store {
   // `saved` is false when the run could not be persisted (local storage unavailable).
   createRun(csv: string, fileName: string, local: Report, signal: AbortSignal): Promise<{ report: Report; saved: boolean }>;
   listRuns(): Promise<Report[]>;
+  deleteRun(id: string): Promise<boolean>;
   clearRuns(): Promise<boolean>;
   listRoutines(): Promise<Routine[]>;
   createRoutine(name: string): Promise<Routine | null>;
@@ -53,6 +58,7 @@ export function localStore(caps: Capabilities): Store {
       return { report, saved: writeSaved(RUN_KEY, runs) };
     },
     async listRuns() { return readSaved(RUN_KEY, isReport); },
+    async deleteRun(id) { return writeSaved(RUN_KEY, readSaved(RUN_KEY, isReport).filter(r => r.id !== id)); },
     async clearRuns() { return writeSaved(RUN_KEY, []); },
     async listRoutines() { return readSaved(ROUTINE_KEY, isRoutine); },
     async createRoutine(name) {
@@ -71,6 +77,7 @@ export function cloudStore(): Store {
       return { report, saved: true };
     },
     async listRuns() { return (await api<{ runs: Report[] }>("/api/runs")).runs.filter(isReport); },
+    async deleteRun(id) { await api(`/api/runs/${encodeURIComponent(id)}`, { method: "DELETE" }); return true; },
     async clearRuns() { await api("/api/runs", { method: "DELETE" }); return true; },
     async listRoutines() { return (await api<{ routines: Routine[] }>("/api/routines")).routines.filter(isRoutine); },
     async createRoutine(name) { return (await api<{ routine: Routine }>("/api/routines", { method: "POST", body: JSON.stringify({ name }) })).routine; },

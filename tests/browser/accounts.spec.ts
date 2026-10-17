@@ -62,6 +62,22 @@ test("a business's reports and routines persist on the server and stay private t
   expect(status).toBe(404);
 });
 
+test("an ended session returns to the sign-in screen, and single reports can be deleted", async ({ page, context }) => {
+  await signUp(page, unique(), "Expiry Co");
+  await page.getByRole("button", { name: "Try this report" }).click();
+  await expect(page.getByRole("button", { name: "Download report" })).toBeVisible();
+  await page.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();
+  await page.getByRole("button", { name: /^Delete report sample-week\.csv/ }).click();
+  await expect(page.getByText("Report deleted.")).toBeVisible();
+  expect(await page.evaluate(async () => (await (await fetch("/api/runs")).json()).runs.length)).toBe(0);
+
+  await context.clearCookies();
+  await page.getByRole("navigation").getByRole("button", { name: /Overview/ }).click();
+  await page.getByRole("button", { name: /A little curious/ }).click();
+  await expect(page.getByRole("heading", { name: "Welcome back." })).toBeVisible();
+  await expect(page.getByText("Your session has ended.", { exact: false })).toBeVisible();
+});
+
 test("wrong passwords are refused with a clear message", async ({ page }) => {
   const email = unique();
   await signUp(page, email, "Typo Pty Ltd");
