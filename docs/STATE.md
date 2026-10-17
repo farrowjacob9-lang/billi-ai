@@ -8,31 +8,20 @@ Read this first. Last updated 17 Oct 2026. Branch: `claude/serene-albattani-sqwi
 - Postgres: runs, routines, audit, AI usage; every tenant query filtered + FORCE row-level security; app refuses to run as a superuser/BYPASSRLS role (`db/migrations/`, `src/server/db.ts`, `repo.ts`).
 - Claude: server-only (`src/server/ai.ts`); model writes placeholders, code fills exact figures (`src/lib/ai/verify.ts`); template fallback; per-business + global daily caps.
 - Neon linked: project `silent-bread-10483900`, branch `production`, endpoint `ep-purple-rice-a7eja082` (ap-southeast-2). Migrations 001–003 applied; `billions_app` role created; test data removed. Migration 003 closes Neon Data API default grants (see README › On Neon).
-- Tests: `npm test` (24, set `TEST_DATABASE_URL` for the Postgres ones), `npm run test:e2e` (11; set `E2E_DATABASE_URL` for accounts).
+- 17 Oct (2nd session): UI quick fixes (icons, error titles by kind, 401 → sign-in, chevron removed, logo/breadcrumb → Overview, per-report delete). Full-screen conversation that splits when a report appears. Account recovery: forgot password (emailed one-time link, 30 min), email verification (gates AI only), change password, delete account, draft `/privacy` + `/terms`. Email via Resend HTTP API (`src/server/email.ts`). Independently reviewed; fixes in `a6dac9e`.
+- Tests: `npm test` (32, set `TEST_DATABASE_URL` for the Postgres ones), `npm run test:e2e` (19; set `E2E_DATABASE_URL` for accounts, which use a fake Resend server).
 
 ## Operator to-dos (outside the code)
 - [ ] Revoke the Neon API key that was pasted in chat (Neon › Account settings › API keys).
-- [ ] Reset `billions_app` password in Neon; keep it in a password manager (the one set in-session was only on the throwaway container).
+- [ ] Reset `billions_app` password in Neon; keep it in a password manager.
 - [ ] Turn off Neon Data API (unused).
-- [ ] Merge the branch, then Vercel: Node 24.x, `DATABASE_URL` = billions_app pooled URL, `ANTHROPIC_API_KEY`, both Sensitive.
+- [ ] **Apply migration 004 to Neon** (`DATABASE_MIGRATION_URL=<owner direct URL> npm run db:migrate`). It grants `email_tokens` to `billions_app` itself; check with `\dp email_tokens`.
+- [ ] Resend: verify the sending domain; set `RESEND_API_KEY` and `EMAIL_FROM` in Vercel as Sensitive (never in chat). `BILLIONS_APP_URL` only if not using the Vercel production domain. Any of these set without the rest keeps AI off for unverified accounts (fail closed).
+- [ ] Legal: fill `src/lib/legal.ts` (entity, ABN, contact email, state), lawyer review of `/privacy` + `/terms`, then set `draft: false`.
+- [ ] Merge the branch, then Vercel: Node 24.x, `DATABASE_URL` = billions_app pooled URL, `ANTHROPIC_API_KEY`, Resend vars, all Sensitive.
 
-## Next session: do 1 + 2 (agreed 17 Oct)
-
-**1. UI quick fixes (frontend only, nothing needed from the operator)**
-- Favicon + app icon (no `public/` folder exists; browsers 404).
-- Error card always says "Let's check that file." — title by error kind (file / session / server).
-- Session expiry: any API 401 → back to the sign-in screen (today it just errors).
-- Workspace picker shows a ▾ but only opens Settings: remove the chevron (no business switching yet).
-- Breadcrumb "Workspace" and the logo → go to Overview, not a reload.
-- Run history: per-report delete (API + UI), not only "Clear all".
-
-**2. Account recovery + legal minimum**
-- Forgot password: emailed one-time link (hashed token, ~30 min expiry, single use), sets new password, ends other sessions.
-- Email verification on sign-up (link); decide whether unverified users can use the app (suggest: yes, with a banner, but no AI until verified — limits sign-up abuse).
-- Gentler lockout: correct password always works from a verified email link path; per-email throttle stays for guessing.
-- Privacy policy + terms pages, linked from sign-up and Settings. Draft only — needs the operator's legal entity name, ABN and contact email, and a legal review before launch.
-- Settings: change password, delete account (and business data) with confirmation.
-- Needs from the operator: a Resend account with the sending domain verified, and `RESEND_API_KEY` + `EMAIL_FROM` stored as environment secrets — never pasted in chat.
+## Next session
+Pick from Later. Known open items from the review, deliberately not done: sign-up still answers 409 for a taken email (enumeration); per-email login lockout can be triggered by anyone (reset is the way out); no backfill of `email_verified_at` (no real users yet — revisit if any sign up before Resend is configured); `RESEND_BASE_URL` override is honoured in production.
 
 ## Later (from the 17 Oct UI audit)
 Real routines (link runs, schedule, email delivery), landing page, billing, team invites, onboarding, PDF export, saved conversations, visible AI allowance.
@@ -41,4 +30,5 @@ Real routines (link runs, schedule, email delivery), landing page, billing, team
 - This cloud container can't open TCP to Neon; use Neon's HTTPS SQL endpoint, or a WebSocket bridge for app tests (see the 17 Oct session: `wss://<host>/v2` via HTTPS proxy).
 - `neon env pull` / `neon deploy` reset `DATABASE_URL` in `.env.local` to the owner; the app then refuses tenant queries until it's pointed back at `billions_app`.
 - Browser tests run against a production build: the Next 16 dev server won't hydrate on 127.0.0.1.
-- Local test Postgres: `initdb` into `/var/tmp/billions-pg`, port 54329, socket `/tmp` (see README › Validation).
+- Local test Postgres: `initdb` into `/var/tmp/billions-pg`, port 54329, socket `/tmp` (see README › Validation). Accounts e2e: `billions_e2e` db, role `billions_app`.
+- Per-IP limits share one bucket in tests (everything is 127.0.0.1); the e2e server raises them via `BILLIONS_*_PER_IP_*` env vars. Without that, repeat runs within 15 minutes fail at verification.
