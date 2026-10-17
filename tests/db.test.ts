@@ -31,6 +31,12 @@ before(async () => {
   await root.query(`ALTER ROLE ${role} PASSWORD '${rolePassword}'`);
   await root.end();
   const ownerUrl = withUrl(admin, dbName);
+  // Recreate Neon's Data API defaults: new tables granted to `authenticated` automatically.
+  const neonLike = new pg.Client({ connectionString: ownerUrl });
+  await neonLike.connect();
+  await neonLike.query(`DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF; END $$`);
+  await neonLike.query("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO authenticated");
+  await neonLike.end();
   await migrate(ownerUrl, () => undefined);
   const owner = new pg.Client({ connectionString: ownerUrl });
   await owner.connect();
@@ -136,4 +142,16 @@ test("the app refuses to serve tenant data through a role that bypasses row-leve
   process.env.DATABASE_URL = withUrl(admin!, dbName);
   try { await assert.rejects(m.repo.listRuns("00000000-0000-0000-0000-000000000000"), /superuser or BYPASSRLS/); }
   finally { await m.db.closePool(); process.env.DATABASE_URL = appUrl; }
+});
+
+test("Neon's Data API role gets no access to Billions tables, now or in future migrations", { skip }, async () => {
+  const owner = new pg.Client({ connectionString: withUrl(admin!, dbName) });
+  await owner.connect();
+  try {
+    const open = await owner.query<{ table_name: string }>(
+      "SELECT c.relname AS table_name FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' AND has_table_privilege('authenticated', c.oid, 'SELECT,INSERT,UPDATE,DELETE')");
+    assert.deepEqual(open.rows, []);
+    await owner.query("CREATE TABLE later_table (id int)");
+    assert.equal((await owner.query("SELECT has_table_privilege('authenticated', 'later_table', 'SELECT') AS ok")).rows[0].ok, false);
+  } finally { await owner.end(); }
 });

@@ -57,6 +57,14 @@ GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO billions_app;
 
 Then set `DATABASE_URL` to the `billions_app` connection string (on serverless, the provider's pooled URL). Re-run the grants after any migration that adds tables. Migrations live in `db/migrations/` and are applied once each, in order.
 
+### On Neon (this project's production database)
+
+The repo is linked to Neon project `silent-bread-10483900`, branch `production` (`neon.ts`, git-ignored `.neon`). Neon specifics:
+
+- **Data API grants.** With Neon's Data API enabled, every table the owner creates is granted to its `authenticated` role by default, which would expose `users` and `sessions` over the public REST endpoint. Migration `003_close_data_api_grants.sql` revokes those grants and defaults; `tests/db.test.ts` proves it. Billions doesn't use the Data API, so turning it off in the console is better still.
+- **Connections.** Migrations use the owner's **direct** URL (`DATABASE_URL_UNPOOLED`, set as `DATABASE_MIGRATION_URL`); the app uses `billions_app` on the **pooled** host. On Vercel the pool is registered with `attachDatabasePool`, per Neon's guidance for `node-postgres`.
+- **`neon env pull` / `neon deploy` reset `DATABASE_URL` in `.env.local` to the owner.** The app then refuses tenant queries (owner bypasses row-level security) until you point `DATABASE_URL` back at `billions_app`. In Vercel, set `DATABASE_URL` by hand; don't use the Neon integration's auto-provisioned owner URL.
+
 ## Validation
 
 ```sh

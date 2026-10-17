@@ -37,6 +37,7 @@ test("a business's reports and routines persist on the server and stay private t
   await page.getByRole("button", { name: "Save routine", exact: true }).click();
   await page.getByLabel("Routine name").fill("Harbour Monday snapshot");
   await page.getByRole("button", { name: "Save routine", exact: true }).last().click();
+  await expect(page.getByText("Routine saved to Harbour Studio.", { exact: false })).toBeVisible();
   const routineId = await page.evaluate(async () => (await (await fetch("/api/routines")).json()).routines[0].id as string);
 
   // A fresh browser has no local storage: whatever it shows came from the server.
