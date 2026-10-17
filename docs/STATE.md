@@ -19,7 +19,8 @@ Read this first. Last updated 17 Oct 2026. Branch: `claude/serene-albattani-sqwi
 - [x] Migration 004 applied to Neon production (17 Oct, via the SQL Editor as owner; `schema_migrations` shows 001–004).
 - [ ] **Deferred by operator (17 Oct).** Resend: verify the sending domain; set `RESEND_API_KEY` and `EMAIL_FROM` in Vercel as Sensitive (never in chat). `BILLIONS_APP_URL` only if not using the Vercel production domain. Any of these set without the rest keeps AI off for unverified accounts (fail closed).
 - [ ] **Parked by operator (17 Oct) until the product works.** Legal: fill `src/lib/legal.ts` (entity, ABN, contact email, state), lawyer review of `/privacy` + `/terms`, then set `draft: false`.
-- [ ] Merge the branch, then Vercel: Node 24.x, `DATABASE_URL` = billions_app pooled URL, `ANTHROPIC_API_KEY`, Resend vars, all Sensitive.
+- [x] Vercel env set (17 Oct): `DATABASE_URL` (billions_app, pooled) and `ANTHROPIC_API_KEY`, all environments. Branch preview `billi-ai-gules.vercel.app` signs up and runs. First attempt failed with `getaddrinfo ENOTFOUND base`: the Anthropic key had been pasted into `DATABASE_URL`.
+- [ ] Merge the branch to `main` so production gets this work; confirm Node 24.x in Vercel.
 
 ## Next session
 Pick from Later. Known open items from the review, deliberately not done: sign-up still answers 409 for a taken email (enumeration); per-email login lockout can be triggered by anyone (reset is the way out); no backfill of `email_verified_at` (no real users yet — revisit if any sign up before Resend is configured); `RESEND_BASE_URL` override is honoured in production; per-IP limits are env-tunable with no production ceiling (never copy the e2e values to Vercel); a half-set email config keeps AI off for unverified users but the UI can't explain why (fix: report it in capabilities); the per-address reset cap (30/day) can still be exhausted by an attacker with many networks.
