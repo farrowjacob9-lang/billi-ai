@@ -18,7 +18,7 @@ Read this first. Last updated 17 Oct 2026. Branch: `claude/serene-albattani-sqwi
 - [ ] Turn off Neon Data API (unused).
 - [x] Migration 004 applied to Neon production (17 Oct, via the SQL Editor as owner; `schema_migrations` shows 001–004).
 - [ ] **Deferred by operator (17 Oct).** Resend: verify the sending domain; set `RESEND_API_KEY` and `EMAIL_FROM` in Vercel as Sensitive (never in chat). `BILLIONS_APP_URL` only if not using the Vercel production domain. Any of these set without the rest keeps AI off for unverified accounts (fail closed).
-- [ ] Legal: fill `src/lib/legal.ts` (entity, ABN, contact email, state), lawyer review of `/privacy` + `/terms`, then set `draft: false`.
+- [ ] **Parked by operator (17 Oct) until the product works.** Legal: fill `src/lib/legal.ts` (entity, ABN, contact email, state), lawyer review of `/privacy` + `/terms`, then set `draft: false`.
 - [ ] Merge the branch, then Vercel: Node 24.x, `DATABASE_URL` = billions_app pooled URL, `ANTHROPIC_API_KEY`, Resend vars, all Sensitive.
 
 ## Next session
