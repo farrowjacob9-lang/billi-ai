@@ -6,6 +6,7 @@ import { AppDialog, type AccountActions } from "@/components/AppDialog";
 import { HistoryView, RoutinesView } from "@/components/ListViews";
 import { Sidebar } from "@/components/Sidebar";
 import { Toast } from "@/components/ui";
+import { WorkspaceTools } from "@/components/WorkspaceTools";
 import { WorkspaceView } from "@/components/WorkspaceView";
 import { compactForModel } from "@/lib/ai/verify";
 import { download } from "@/lib/browser";
@@ -27,7 +28,7 @@ function uiError(e: unknown): UiError {
     if ([400, 413, 422].includes(e.status)) return { kind: "file", message: e.message };
     return { kind: "server", message: e.message };
   }
-  if (e instanceof TypeError) return { kind: "server", message: "We couldn’t reach Billions. Check your connection and try again." };
+  if (e instanceof TypeError) return { kind: "server", message: "We couldn’t reach Naxium. Check your connection and try again." };
   return { kind: "file", message: e instanceof Error ? e.message : "We couldn’t read that file. Try a fresh CSV export." };
 }
 
@@ -35,6 +36,7 @@ function uiError(e: unknown): UiError {
 export function App({ caps }: { caps: Capabilities }) {
   const [view, setView] = useState<View>("workspace");
   const [report, setReport] = useState<Report | null>(null);
+  const [workspaceSession,setWorkspaceSession]=useState(0);
   const [sheets, setSheets] = useState<Sheet[]>([]);
   const [sheetIndex, setSheetIndex] = useState(0);
   const sheet = sheets[sheetIndex] ?? null;
@@ -80,8 +82,8 @@ export function App({ caps }: { caps: Capabilities }) {
   const say = (role: Message["role"], text: string, kind?: Message["kind"]) => setMessages(previous => [...previous, { id: Date.now() + Math.random(), role, text, kind }]);
   function navigate(next: View) { setView(next); setMobileNav(false); }
   function cancelRun() { operation.current++; abort.current?.abort(); setBusy(false); }
-  function openRun(run: Report, clearMessages: boolean) { cancelRun(); conversation.current++; setSheets([]); setReplying(false); setReport(run); setError(null); if (clearMessages) setMessages([]); navigate("workspace"); }
-  function newConversation() { conversation.current++; setReplying(false); cancelRun(); setReport(null); setSheets([]); setMessages([]); setError(null); navigate("workspace"); }
+  function openRun(run: Report, clearMessages: boolean) { setWorkspaceSession(n=>n+1); cancelRun(); conversation.current++; setSheets([]); setReplying(false); setReport(run); setError(null); if (clearMessages) setMessages([]); navigate("workspace"); }
+  function newConversation() { setWorkspaceSession(n=>n+1); conversation.current++; setReplying(false); cancelRun(); setReport(null); setSheets([]); setMessages([]); setError(null); navigate("workspace"); }
 
   async function runCsv(csv: string, fileName: string) {
     cancelRun(); conversation.current++; setReplying(false);
@@ -114,9 +116,9 @@ export function App({ caps }: { caps: Capabilities }) {
     try {
       const loaded = await readSpreadsheet(file);
       if (current !== operation.current) return;
-      setSheets(loaded); setSheetIndex(0); setReport(null); setMessages([]);
+      setWorkspaceSession(n=>n+1); setSheets(loaded); setSheetIndex(0); setReport(null); setMessages([]);
       say("user", `Work with ${file.name}.`, "run");
-      say("assistant", `Ready: ${loaded[0].rows.length} rows and ${loaded[0].columns.length} columns in ${loaded[0].name}. Ask for a total, an average, a count, a breakdown by category or matching transactions. Use the exact column headings in your questions. This spreadsheet stays in this conversation until you refresh or start a new one; it isn't saved to history.`, "run");
+      say("assistant", `Ready: ${loaded[0].rows.length} rows and ${loaded[0].columns.length} columns in ${loaded[0].name}. Ask for a total, an average, a count, a breakdown by category or matching transactions. Use the exact column headings in your questions. Use Save workspace to keep the parsed cells and conversation for 30 days. Otherwise they stay in this tab until you refresh or start a new conversation.`, "run");
     } catch (e) { if (current === operation.current) setError(uiError(e)); }
     finally { if (current === operation.current) setBusy(false); }
   }
@@ -127,16 +129,17 @@ export function App({ caps }: { caps: Capabilities }) {
       const asked = conversation.current;
       setReplying(true);
       let answer: string;
+      let usedPlan: import("@/lib/sheet").Plan | undefined;
       try {
         const plan = simplePlan(text, sheet);
-        if (plan) answer = executePlan(sheet, plan);
+        if (plan) { answer = executePlan(sheet, plan); usedPlan = plan; }
         else if (caps.ai) {
           const history = messages.filter(m => m.role === "user" && m.kind !== "run").slice(-6).map(m => m.text);
-          answer = (await api<{ reply: string }>("/api/sheet-question", { method: "POST", body: JSON.stringify({ sheet, question: text, history }) })).reply;
+          const result = await api<{ reply: string; plan?: import("@/lib/sheet").Plan }>("/api/sheet-question", { method: "POST", body: JSON.stringify({ sheet, question: text, history }) }); answer = result.reply; usedPlan = result.plan;
         } else answer = `Open-ended questions need an AI connection on this deployment. You can still ask “how many rows”, “total ${sheet.columns[0]}” or “average ${sheet.columns[0]}” (use a numeric column for totals and averages).`;
       } catch (e) { answer = e instanceof Error ? e.message : "The question couldn't be answered. Try again."; }
       if (conversation.current !== asked) return;
-      setReplying(false); say("assistant", answer); return;
+      setReplying(false); setMessages(previous => [...previous, {id:Date.now()+Math.random(),role:"assistant",text:answer,...(usedPlan ? {plan:usedPlan}:{})}]); return;
     }
     if (!caps.ai) { say("assistant", localReply(text, report)); return; }
     const asked = conversation.current, about = report;
@@ -187,7 +190,7 @@ export function App({ caps }: { caps: Capabilities }) {
     } catch (e) { setToast(e instanceof ApiError ? e.message : "The link couldn’t be sent. Please try again."); }
   }
 
-  const failure = (e: unknown) => e instanceof ApiError ? e.message : "We couldn’t reach Billions. Check your connection and try again.";
+  const failure = (e: unknown) => e instanceof ApiError ? e.message : "We couldn’t reach Naxium. Check your connection and try again.";
   const account: AccountActions | undefined = caps.user ? {
     async changePassword(currentPassword, newPassword) {
       try {
@@ -222,8 +225,10 @@ export function App({ caps }: { caps: Capabilities }) {
     <main className="main-shell">
       <header className="topbar"><div className="breadcrumb"><button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMobileNav(true)}><Menu size={20} /></button><button className="breadcrumb-link" onClick={() => navigate("workspace")}>Workspace</button><ChevronRight size={14} /><strong>{title}</strong></div><div className="topbar-right"><span className="prototype-badge"><span /> {copy.badge}</span><button className="icon-button" aria-label="Workspace settings" onClick={() => setModal("settings")}><Settings2 size={18} /></button></div></header>
       <div className="page-content">
+        {!signedOut && <WorkspaceTools sessionKey={workspaceSession} caps={caps} snapshot={sheet ? {sheets,sheetIndex,messages} : null} onRestore={saved => { cancelRun(); conversation.current++; setReport(null); setSheets(saved.sheets); setSheetIndex(saved.sheetIndex); setMessages(saved.messages); setError(null); setReplying(false); navigate("workspace"); }} onReview={(id,decision)=>setMessages(previous=>previous.map(m=>m.id===id?{...m,decision}:m))} onNotice={setToast} />}
+
         {unverified && <div className="verify-banner" role="status"><MailCheck size={18} /><p>Confirm your email to turn on the AI assistant. We sent a link to <strong>{caps.user!.email}</strong>. Reports work in the meantime.</p><button className="secondary-button" onClick={() => void resendVerification()}>Send a new link</button></div>}
-        {view === "workspace" ? <WorkspaceView onPrepareSheetReport={() => { if (!sheet) return; const csv = [sheet.columns, ...sheet.rows].map(row => row.map(c => '"' + String(c ?? "").replaceAll('"', '""') + '"').join(",")).join("\n"); void runCsv(csv, sheet.name); }} sheet={sheet} sheets={sheets} sheetIndex={sheetIndex} onSelectSheet={index => { conversation.current++; setReplying(false); setSheetIndex(index); setMessages([]); setError(null); }} report={report} messages={messages} busy={busy} replying={replying} stage={stage} error={error} privacyNote={sheet ? "Excel workbooks are parsed on our server without being saved. CSV files are parsed in this tab. AI questions are calculated on our server; Claude receives column headings and your questions only. The spreadsheet is not saved." : copy.privacyNote} modeLabel={copy.modeLabel}
+        {view === "workspace" ? <WorkspaceView onPrepareSheetReport={() => { if (!sheet) return; const csv = [sheet.columns, ...sheet.rows].map(row => row.map(c => '"' + String(c ?? "").replaceAll('"', '""') + '"').join(",")).join("\n"); void runCsv(csv, sheet.name); }} sheet={sheet} sheets={sheets} sheetIndex={sheetIndex} onSelectSheet={index => { conversation.current++; setReplying(false); setSheetIndex(index); setMessages([]); setError(null); }} report={report} messages={messages} busy={busy} replying={replying} stage={stage} error={error} privacyNote={sheet ? "Excel workbooks are parsed on our server without being saved. CSV files are parsed in this tab. AI questions are calculated on our server; Claude receives column headings and your questions only. Only Save workspace retains the parsed data and conversation." : copy.privacyNote} modeLabel={copy.modeLabel}
           onPickFile={() => fileInput.current?.click()} onUpload={file => void upload(file)} onRunSample={runSample} onCancel={() => { cancelRun(); setToast("Report cancelled. Your file is unchanged."); }} onDismissError={() => setError(null)}
           onSend={text => void send(text)} onDownloadReport={() => { if (report) download(`billions-report-${report.startDate}.md`, reportMarkdown(report), "text/markdown"); }}
           onDownloadSample={() => download("billions-sample.csv", SAMPLE_CSV, "text/csv")} onSaveRoutine={() => setModal("routine")} onViewRoutines={() => navigate("routines")} />

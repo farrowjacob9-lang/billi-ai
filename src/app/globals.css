@@ -70,3 +70,81 @@
 .sheet-scroll th, .sheet-scroll td { text-align: left; padding: 10px; border-bottom: 1px solid #eee; min-width: 90px; max-width: 260px; overflow-wrap: anywhere; }
 .sheet-scroll th { background: #f7f7f5; }
 .message-list .message > div { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Naxium identity adapted from naxium-app. Keep spreadsheet work compact. */
+:root { --paper:#f5f5f3; --ink:#1c1f20; --muted:#656c6e; --green:#1c1f20; --deep:#1c1f20; --border:#dfe2e2; --mint:#eceeed; --sidebar:#1c1f20; --surface:#fff; --font-body:Arial,Helvetica,sans-serif; --font-heading:Arial,Helvetica,sans-serif; color-scheme:light; }
+[data-theme="dark"] { --paper:#171a1b; --ink:#e8e7e3; --muted:#b2b8b8; --green:#c7cfcf; --deep:#c7cfcf; --border:#3a4143; --mint:#303739; --sidebar:#121516; --surface:#23282a; color-scheme:dark; }
+.sidebar { width:224px; padding:25px 16px 0; color:#c7cfcf; }
+.main-shell { margin-left:224px; }
+.brand { font-family:var(--font-body); font-size:27px; font-weight:500; letter-spacing:-1px; padding:0 8px; color:#f4f3f0; }
+.brand img { display:block; }
+.workspace-picker { margin:25px 0 18px; background:#272d2f; border-color:#3a4143; color:#f4f3f0; }
+.workspace-avatar,.profile-avatar { background:#454e50; color:#f4f3f0; border-color:#697577; }
+.workspace-avatar span,.prototype-badge>span,.status-dot { background:#7ba78e; }
+.new-chat { background:#e8e7e3; color:#1c1f20; border-color:#e8e7e3; }
+.new-chat:hover { background:#fff; }
+.nav-item,.recent-list button { color:#c7cfcf; }
+.nav-item.active,.nav-item:hover { background:#333a3d; color:white; }
+.nav-item.active svg { color:#c7cfcf; }
+.nav-label { color:#a3adae; }
+.active-dot { background:#c7cfcf; }
+.sidebar-bottom { padding-top:20px; }
+.profile { border-color:#454e50; color:#e8e7e3; }
+.topbar { height:62px; padding:0 28px; background:var(--surface); }
+.breadcrumb strong,.breadcrumb-link { color:var(--ink); }
+.prototype-badge { color:var(--muted); }
+.page-content { padding:24px 28px; }
+.page-heading { margin:24px 0; }
+.page-heading h1 { font-size:27px; letter-spacing:-.8px; font-weight:600; }
+.page-heading p { font-size:14px; color:var(--muted); }
+.heading-art,.eyebrow,.sidebar-note,.routine-nudge,.page-footer { display:none; }
+.section-heading h2 { font-size:14px; }
+.section-heading>span { color:var(--muted); font-size:11px; }
+.workspace-grid { gap:22px; }
+.workspace-grid.solo { max-width:950px; margin:auto; }
+.workspace-grid.solo .conversation-card { min-height:430px; }
+.workspace-grid.solo .conversation-body { min-height:280px; padding:28px; }
+.conversation-card,.report-card,.sheet-card,.modal-content,.auth-card { background:var(--surface); border-color:var(--border); box-shadow:none; }
+.conversation-body { min-height:280px; padding:24px; }
+.conversation-body>h3 { font-size:23px; }
+.conversation-body>p { color:var(--muted); font-size:14px; }
+.assistant-avatar { background:var(--mint); color:var(--ink); width:34px; height:34px; }
+.starter-actions button,.secondary-button,.tools-row select,.workspace-tools input { background:var(--surface); border:1px solid var(--border); color:var(--ink); font-size:13px; }
+.starter-actions button:hover,.secondary-button:hover { background:var(--mint); }
+.primary-button,.send-button { background:var(--ink); color:var(--surface); }
+.composer { background:var(--surface); border-color:var(--border); margin:12px; }
+.composer textarea { background:transparent; color:var(--ink); font-size:14px; }
+.composer-mode,.local-note,.template-link,.sheet-card p { color:var(--muted); }
+.message { font-size:14px; line-height:1.65; }
+.message.user>div { background:var(--mint); color:var(--ink); }
+.message.assistant>div { color:var(--ink); }
+.message-avatar { background:var(--mint); color:var(--ink); }
+.sheet-card { padding:20px; }
+.sheet-card select { background:var(--surface); color:var(--ink); border-color:var(--border); }
+.sheet-scroll th { background:var(--mint); }
+.sheet-scroll th,.sheet-scroll td { border-color:var(--border); }
+.auth-shell { background:var(--paper); }
+.auth-brand { color:var(--ink); }
+.auth-card input,.modal input { background:var(--surface); color:var(--ink); border-color:var(--border); }
+.auth-lede,.auth-note { color:var(--muted); }
+.auth-card h1 span { color:var(--ink); }
+.workspace-tools { padding:14px 18px; background:var(--surface); border:1px solid var(--border); border-radius:10px; margin-bottom:18px; }
+.workspace-tools>summary { font-weight:600; cursor:pointer; }
+.workspace-tools details { padding:14px 0; border-top:1px solid var(--border); }
+.workspace-tools details summary { cursor:pointer; font-weight:600; }
+.workspace-tools p { color:var(--muted); font-size:12px; line-height:1.65; margin:12px 0; }
+.tools-row { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:12px 0; }
+.tools-row input,.tools-row select { border-radius:6px; padding:9px; min-width:0; max-width:100%; }
+.tools-row .primary-button { width:auto; margin:0; padding:10px 16px; }
+.workspace-tools .secondary-button { padding:9px 12px; margin:0; width:auto; }
+.workspace-tools textarea { width:100%; padding:10px; background:var(--surface); color:var(--ink); border:1px solid var(--border); margin-top:7px; }
+.answer-review { border-bottom:1px solid var(--border); padding:16px 0; }
+.answer-review pre,.job-result pre { white-space:pre-wrap; overflow-wrap:anywhere; font:13px/1.7 var(--font-body); }
+.saved-routine { display:flex; flex-wrap:wrap; gap:10px; padding:12px 0; align-items:center; }
+.job-result { border-top:1px solid var(--border); padding:14px 0; }
+.tools-row>strong { margin-right:auto; }
+@media(max-width:1000px) { .workspace-grid.split { grid-template-columns:minmax(0,1fr); } }
+@media(max-width:760px) { .main-shell { margin-left:0; } .sidebar { width:224px; } .page-content { padding:16px; } .topbar { padding:0 16px; } .tools-row { align-items:stretch; } .tools-row input,.tools-row select { flex:1; } }
+.report-cover { background:var(--mint); color:var(--ink); }
+.report-cover h2,.report-cover p,.report-cover span { color:var(--ink); }
+@media(max-width:760px) { .sidebar:not(.mobile-open) { transform:translateX(-100%); } .sidebar.mobile-open { transform:translateX(0); } .mobile-menu { display:flex; } }

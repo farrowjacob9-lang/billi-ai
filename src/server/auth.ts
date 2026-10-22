@@ -22,7 +22,7 @@ const waiting: (() => void)[] = [];
 
 async function derive(password: string, salt: Buffer, options: ScryptOptions): Promise<Buffer> {
   if (hashing >= HASH_CONCURRENCY) {
-    if (waiting.length >= HASH_QUEUE_LIMIT) throw new AuthError("rate_limited", "Billions is busy right now. Try again in a moment.");
+    if (waiting.length >= HASH_QUEUE_LIMIT) throw new AuthError("rate_limited", "Naxium is busy right now. Try again in a moment.");
     await new Promise<void>(resolve => waiting.push(resolve));
   }
   hashing++;

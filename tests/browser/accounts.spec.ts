@@ -18,18 +18,18 @@ async function emailedLink(email: string, path: string, nth = 1): Promise<string
 
 async function signUp(page: Page, email: string, business: string, { verify = true } = {}) {
   await page.goto("/");
-  await page.getByRole("button", { name: "New to Billions? Create a workspace" }).click();
+  await page.getByRole("button", { name: "New to Naxium? Create a workspace" }).click();
   await page.getByLabel("Business name").fill(business);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Create workspace" }).click();
-  await expect(page.getByRole("heading", { name: "Make room for your best work." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Work with your data" })).toBeVisible();
   if (!verify) return;
   await page.goto(await emailedLink(email, "/verify-email"));
   await page.getByRole("button", { name: "Confirm my email" }).click();
   await expect(page.getByRole("heading", { name: "Email confirmed." })).toBeVisible();
-  await page.getByRole("link", { name: "Go to Billions" }).click();
-  await expect(page.getByRole("heading", { name: "Make room for your best work." })).toBeVisible();
+  await page.getByRole("link", { name: "Go to Naxium" }).click();
+  await expect(page.getByRole("heading", { name: "Work with your data" })).toBeVisible();
 }
 
 async function signIn(page: Page, email: string, password = PASSWORD) {
@@ -132,7 +132,7 @@ test("a new account can report straight away, and turns on the AI by confirming 
   await page.getByRole("button", { name: "Confirm my email" }).click();
   await expect(page.getByRole("heading", { name: "Email confirmed." })).toBeVisible();
   expect(new URL(page.url()).hash, "the token is dropped from the address bar").toBe("");
-  await page.getByRole("link", { name: "Go to Billions" }).click();
+  await page.getByRole("link", { name: "Go to Naxium" }).click();
   await expect(page.getByText("Confirm your email to turn on the AI assistant.")).toHaveCount(0);
   await page.getByRole("button", { name: "Try a sample report" }).click();
   await expect(page.getByText("Written by Claude · figures verified")).toBeVisible();
@@ -145,7 +145,7 @@ test("a forgotten password is reset from an emailed link, which also lifts a loc
   const elsewhere = await other.newPage();
   await elsewhere.goto("/");
   await signIn(elsewhere, email);
-  await expect(elsewhere.getByRole("heading", { name: "Make room for your best work." })).toBeVisible();
+  await expect(elsewhere.getByRole("heading", { name: "Work with your data" })).toBeVisible();
   await signOut(page);
 
   for (let i = 0; i < 6; i++) { await signIn(page, email, "not my password"); await expect(page.locator(".error-card[role=alert]")).toBeVisible(); }
@@ -160,7 +160,7 @@ test("a forgotten password is reset from an emailed link, which also lifts a loc
   await page.getByLabel("New password", { exact: true }).fill("a brand new passphrase");
   await page.getByLabel("Confirm new password").fill("a brand new passphrase");
   await page.getByRole("button", { name: "Save and sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Make room for your best work." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Work with your data" })).toBeVisible();
 
   await page.goto(link);
   await page.getByLabel("New password", { exact: true }).fill("yet another passphrase");
@@ -171,7 +171,7 @@ test("a forgotten password is reset from an emailed link, which also lifts a loc
   await elsewhere.reload();
   await expect(elsewhere.getByRole("heading", { name: "Welcome back." })).toBeVisible();
   await signIn(elsewhere, email, "a brand new passphrase");
-  await expect(elsewhere.getByRole("heading", { name: "Make room for your best work." })).toBeVisible();
+  await expect(elsewhere.getByRole("heading", { name: "Work with your data" })).toBeVisible();
   await other.close();
 });
 
@@ -195,7 +195,7 @@ test("settings change the password, link the legal pages, and delete the account
   const elsewhere = await other.newPage();
   await elsewhere.goto("/");
   await signIn(elsewhere, email);
-  await expect(elsewhere.getByRole("heading", { name: "Make room for your best work." })).toBeVisible();
+  await expect(elsewhere.getByRole("heading", { name: "Work with your data" })).toBeVisible();
 
   await page.getByRole("button", { name: "Workspace settings" }).click();
   await expect(page.getByRole("dialog").getByRole("link", { name: "Privacy Policy" })).toHaveAttribute("href", "/privacy");
@@ -225,7 +225,7 @@ test("settings change the password, link the legal pages, and delete the account
 
 test("sign-up links the draft legal pages", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "New to Billions? Create a workspace" }).click();
+  await page.getByRole("button", { name: "New to Naxium? Create a workspace" }).click();
   await expect(page.getByRole("link", { name: "Terms of Service" })).toHaveAttribute("href", "/terms");
   for (const [path, heading] of [["/privacy", "Privacy Policy."], ["/terms", "Terms of Service."]]) {
     await page.goto(path);

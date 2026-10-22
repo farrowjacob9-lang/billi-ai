@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { recordCall } from "./metering";
 import { factsBlock, fillPlaceholders } from "../lib/ai/verify.ts";
 import type { Report } from "../lib/report.ts";
 
@@ -21,7 +22,7 @@ All filters are AND. Use count to count rows; use rows to list records, optional
   try { return JSON.parse(raw); } catch { return null; }
 }
 
-const SHARED_RULES = `You work inside Billions, a workspace for small Australian businesses. All amounts are AUD.
+const SHARED_RULES = `You work inside Naxium, a workspace for small Australian businesses. All amounts are AUD.
 The JSON between <facts> tags was calculated in code from the user's CSV and is correct. It is all you know about their business.
 How to write figures: never type a number, amount, percentage or date yourself. Refer to each figure by its placeholder exactly as it appears in the facts, such as {income}, {category:Rent} or {date:2026-10-05}; code replaces each placeholder with the checked value. Text containing a digit, a number word (one, twice, half…), a currency symbol or a percent sign is discarded.
 Rules:
@@ -31,6 +32,7 @@ Rules:
 - Plain text only: no markdown, lists or headings.`;
 
 async function complete(system: string, messages: Anthropic.Beta.BetaMessageParam[], signal?: AbortSignal): Promise<string | null> {
+  const started = Date.now();
   try {
     const response = await getClient().beta.messages.create({
       model: MODEL(),
@@ -41,10 +43,12 @@ async function complete(system: string, messages: Anthropic.Beta.BetaMessagePara
       system,
       messages,
     }, { signal });
+    await recordCall(MODEL(), response.usage, Date.now()-started);
     if (response.stop_reason !== "end_turn") { console.warn(`[ai] stopped with ${response.stop_reason}`); return null; }
     const text = response.content.flatMap(block => block.type === "text" ? [block.text] : []).join("").trim();
     return text || null;
   } catch (error) {
+    await recordCall(MODEL(), null, Date.now()-started);
     if (error instanceof Anthropic.AuthenticationError) console.error("[ai] the Anthropic API key was rejected");
     else if (error instanceof Anthropic.RateLimitError) console.warn("[ai] rate limited by the provider");
     else if (error instanceof Anthropic.APIConnectionTimeoutError) console.warn("[ai] request timed out");
@@ -64,7 +68,7 @@ export async function writeNarrative(report: Report, signal?: AbortSignal): Prom
   return accept(text, report, 700);
 }
 
-const CSV_HELP = "Billions accepts a CSV with date, description, category and amount columns ({columns} columns): dates written year-month-day covering at most {maxDays} consecutive days, positive amounts for income, negative for expenses, in AUD with cents at most, without currency symbols or thousands separators, under {maxMegabytes} MB and at most {maxTransactions} transactions.";
+const CSV_HELP = "Naxium accepts a CSV with date, description, category and amount columns ({columns} columns): dates written year-month-day covering at most {maxDays} consecutive days, positive amounts for income, negative for expenses, in AUD with cents at most, without currency symbols or thousands separators, under {maxMegabytes} MB and at most {maxTransactions} transactions.";
 
 export async function answerQuestion(question: string, report: Report | null, history: ChatTurn[], signal?: AbortSignal): Promise<string | null> {
   const turns: Anthropic.Beta.BetaMessageParam[] = [];

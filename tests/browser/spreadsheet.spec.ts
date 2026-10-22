@@ -13,21 +13,21 @@ test("real multi-sheet Excel supports totals, category questions, matching rows 
   await page.goto("/");
   await page.getByLabel("Upload spreadsheet").setInputFiles({ name: "real-expenses.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: Buffer.from(await workbook.xlsx.writeBuffer()) });
   await expect(page.getByRole("region", { name: "Spreadsheet preview" })).toBeVisible();
-  const composer = page.getByLabel("Message Billions");
+  const composer = page.getByLabel("Message Naxium");
   async function ask(q: string) { await composer.fill(q); await page.getByRole("button", { name: "Send message" }).click(); }
   await ask("total Amount");
-  await expect(page.getByText(/All rows: -80.3/)).toBeVisible();
+  await expect(page.getByRole("region", {name:"Conversation workspace"}).getByText(/All rows: -80.3/)).toBeVisible();
   await ask("sum Amount by Category");
-  await expect(page.getByText(/Travel: -30.3\s+Software: -50/)).toBeVisible();
+  await expect(page.getByRole("region", {name:"Conversation workspace"}).getByText(/Travel: -30.3\s+Software: -50/)).toBeVisible();
   await ask("Show the largest negative Amount transaction");
-  await expect(page.getByText(/Row 4: Date: 2026-11-15/)).toBeVisible();
+  await expect(page.getByRole("region", {name:"Conversation workspace"}).getByText(/Row 4: Date: 2026-11-15/)).toBeVisible();
   const sent = JSON.stringify(await (await request.get("http://127.0.0.1:4010/requests")).json());
   expect(sent).toContain("Translate a spreadsheet question");
   expect(sent).not.toContain("Private vendor");
   await page.getByLabel("Active sheet").selectOption("1");
   await ask("total Amount");
-  await expect(page.getByText(/All rows: 200/)).toBeVisible();
-  await expect(page.getByText(/All rows: -80.3/)).toHaveCount(0);
+  await expect(page.getByRole("region", {name:"Conversation workspace"}).getByText(/All rows: 200/)).toBeVisible();
+  await expect(page.getByRole("region", {name:"Conversation workspace"}).getByText(/All rows: -80.3/)).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole("region", { name: "Spreadsheet preview" })).toHaveCount(0);
 });
@@ -36,9 +36,9 @@ test("invalid plans cannot invent a column and formula cells are rejected", asyn
   await page.goto("/");
   await page.getByLabel("Upload spreadsheet").setInputFiles({ name: "test.csv", mimeType: "text/csv", buffer: Buffer.from("Category,Amount\nTravel,-12.50") });
   await expect(page.getByRole("region", { name: "Spreadsheet preview" })).toBeVisible();
-  await page.getByLabel("Message Billions").fill("invent a total");
+  await page.getByLabel("Message Naxium").fill("invent a total");
   await page.getByRole("button", { name: "Send message" }).click();
-  await expect(page.getByText("Which numeric column should I use?")).toBeVisible();
+  await expect(page.getByRole("region", {name:"Conversation workspace"}).getByText("Which numeric column should I use?")).toBeVisible();
   const book = new ExcelJS.Workbook();
   const ws = book.addWorksheet("Formulas");
   ws.addRow(["Amount"]); ws.addRow([{ formula: "1+1", result: 2 }]);
@@ -59,9 +59,9 @@ test("the downloadable tricky workbook opens with formatting, filters and two sh
   await page.getByLabel("Upload spreadsheet").setInputFiles("tests/tricky-transactions.xlsx");
   await expect(page.getByRole("region", { name: "Spreadsheet preview" })).toBeVisible();
   await expect(page.getByLabel("Active sheet").locator("option")).toHaveCount(2);
-  await page.getByLabel("Message Billions").fill("total Amount");
+  await page.getByLabel("Message Naxium").fill("total Amount");
   await page.getByRole("button", { name: "Send message" }).click();
-  await expect(page.getByText(/All rows: 9,808.97/)).toBeVisible();
+  await expect(page.getByRole("region", {name:"Conversation workspace"}).getByText(/All rows: 9,808.97/)).toBeVisible();
 });
 
 test("Excel parser refuses malformed uploads and cross-site requests", async ({ request }) => {
@@ -71,4 +71,33 @@ test("Excel parser refuses malformed uploads and cross-site requests", async ({ 
   expect(corrupt.status()).toBe(422);
   const crossSite = await request.post('/api/spreadsheets', { data: {}, headers: { origin: 'https://evil.example' } });
   expect(crossSite.status()).toBe(403);
+});
+
+test('Naxium saved work survives refresh, keeps review decisions, and exports Excel and PDF',async({page})=>{
+ await page.goto('/');
+ await page.getByLabel('Upload spreadsheet').setInputFiles('tests/tricky-transactions.xlsx');
+ await expect(page.getByRole('region',{name:'Spreadsheet preview'})).toBeVisible();
+ await page.getByLabel('Message Naxium').fill('total Amount');await page.getByRole('button',{name:'Send message'}).click();
+ await expect(page.getByRole("region", {name:"Conversation workspace"}).getByText(/All rows: 9,808.97/)).toBeVisible();
+ await page.getByText('Saved work, exports & routines',{exact:true}).click();
+ await page.getByText('Review answers',{exact:true}).click();
+ await page.getByRole('button',{name:'Approve',exact:true}).click();
+ await page.getByLabel('Workspace name').fill('Tricky financial review');
+ await page.getByRole('button',{name:'Save workspace',exact:true}).click();
+ await expect(page.getByText(/Workspace saved for 30 days/)).toBeVisible();
+ for(const kind of ['Excel','PDF']){
+  const wait=page.waitForEvent('download');await page.getByRole('button',{name:'Export '+kind,exact:true}).click();const download=await wait;const stream=await download.createReadStream();const parts:Buffer[]=[];for await(const c of stream!)parts.push(Buffer.from(c));const bytes=Buffer.concat(parts);if(kind==='PDF')expect(bytes.subarray(0,4).toString()).toBe('%PDF');else{const b=new ExcelJS.Workbook();await b.xlsx.load(bytes as never);expect(b.getWorksheet('Source data')!.rowCount).toBe(19);expect(b.getWorksheet('Answers and review')!.getRow(2).getCell(3).value).toBe('approved');}
+ }
+ await page.getByRole('button',{name:'Dark theme',exact:true}).click();await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
+ await page.reload();
+ await page.getByText('Saved work, exports & routines',{exact:true}).click();
+ await page.getByLabel('Saved workspaces').selectOption({label:'Tricky financial review'});
+ await expect(page.getByRole('region',{name:'Spreadsheet preview'})).toBeVisible();
+ await expect(page.getByRole("region", {name:"Conversation workspace"}).getByText(/All rows: 9,808.97/).first()).toBeVisible();
+ await page.getByText('Review answers',{exact:true}).click();await expect(page.getByText('approved',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Delete saved workspace',exact:true}).click();
+ await expect(page.getByLabel('Saved workspaces').locator('option')).toHaveCount(1);
+ await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await expect.poll(async()=>((await page.locator('.sidebar').boundingBox())?.x??0)+224).toBeLessThanOrEqual(1);
+ await page.screenshot({path:'/workspace/artifacts/naxium-workspace-mobile.png',fullPage:true});
 });

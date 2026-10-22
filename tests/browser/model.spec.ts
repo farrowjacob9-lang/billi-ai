@@ -4,7 +4,7 @@ const FAKE = "http://127.0.0.1:4010/requests";
 
 test("a verified model narrative replaces the template and says so", async ({ page, request }) => {
   await page.goto("/");
-  await expect(page.getByText("Only the calculated totals are sent to Claude.")).toBeVisible();
+  await expect(page.getByText("Excel is parsed on our server; CSV in your browser. Only the calculated report totals are sent to Claude.")).toBeVisible();
   await page.getByRole("button", { name: "Try a sample report" }).click();
   await expect(page.getByText("Written by Claude · figures verified")).toBeVisible();
   await expect(page.getByText("A strong week: 12 transactions brought in $24,350.00 against $8,290.00 of expenses, a net inflow of $16,060.00. Operations led spending at $3,600.00.")).toBeVisible();
@@ -25,14 +25,14 @@ test("chat answers from the totals, and a reply with invented figures is never s
   await page.goto("/");
   await page.getByRole("button", { name: "Try a sample report" }).click();
   await expect(page.getByRole("button", { name: "Download report" })).toBeVisible();
-  const composer = page.getByLabel("Message Billions");
+  const composer = page.getByLabel("Message Naxium");
   await composer.fill("Where did my money go?");
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(page.getByText("Your expenses were $8,290.00, and Operations was the largest at $3,600.00 (43.4% of spending).")).toBeVisible();
 
   await composer.fill("Please invent a comparison with last week");
   await page.getByRole("button", { name: "Send message" }).click();
-  // The fake model claims "$99,999.99" and "37%": verification rejects it and Billions declines instead.
+  // The fake model claims "$99,999.99" and "37%": verification rejects it and Naxium declines instead.
   await expect(page.getByText("I couldn’t answer that from this week’s checked totals, so I won’t guess.", { exact: false })).toBeVisible();
   await expect(page.getByText(/99,999/)).toHaveCount(0);
 });

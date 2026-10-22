@@ -17,7 +17,7 @@ function useLinkToken(): string | null | undefined {
   return token;
 }
 
-const failure = (e: unknown) => e instanceof ApiError ? e.message : "We couldn’t reach Billions. Check your connection and try again.";
+const failure = (e: unknown) => e instanceof ApiError ? e.message : "We couldn’t reach Naxium. Check your connection and try again.";
 
 export function ResetPasswordPage() {
   const token = useLinkToken();
@@ -63,9 +63,9 @@ export function VerifyEmailPage() {
     catch (e) { setError(failure(e)); setState("failed"); }
   }
 
-  if (token === null) return <AuthCard title="This link is incomplete" lede="Open the link from your email again, or send a new one from the banner in Billions."><a className="primary-button auth-submit" href="/">Go to Billions <ArrowRight size={16} /></a></AuthCard>;
-  if (state === "done") return <AuthCard title="Email confirmed" lede="Thanks. The AI assistant is on for your workspace."><a className="primary-button auth-submit" href="/">Go to Billions <ArrowRight size={16} /></a></AuthCard>;
-  if (state === "failed") return <AuthCard title="We couldn’t confirm that" lede={error}><a className="primary-button auth-submit" href="/">Go to Billions <ArrowRight size={16} /></a></AuthCard>;
+  if (token === null) return <AuthCard title="This link is incomplete" lede="Open the link from your email again, or send a new one from the banner in Naxium."><a className="primary-button auth-submit" href="/">Go to Naxium <ArrowRight size={16} /></a></AuthCard>;
+  if (state === "done") return <AuthCard title="Email confirmed" lede="Thanks. The AI assistant is on for your workspace."><a className="primary-button auth-submit" href="/">Go to Naxium <ArrowRight size={16} /></a></AuthCard>;
+  if (state === "failed") return <AuthCard title="We couldn’t confirm that" lede={error}><a className="primary-button auth-submit" href="/">Go to Naxium <ArrowRight size={16} /></a></AuthCard>;
   return <AuthCard title="Confirm your email" lede="One click and the AI assistant is on for your workspace.">
     <button className="primary-button auth-submit" onClick={() => void confirm()} disabled={!token || state === "checking"}>{state === "checking" ? "One moment…" : "Confirm my email"} <ArrowRight size={16} /></button>
   </AuthCard>;

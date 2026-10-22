@@ -16,7 +16,7 @@ const COPY: Record<Mode, { title: string; lede: string; submit: string }> = {
 export function AuthCard({ title, lede, children }: { title: string; lede: string; children: ReactNode }) {
   return <main className="auth-shell">
     <div className="auth-card">
-      <a className="brand auth-brand" href="/" aria-label="Billions home"><span className="brand-mark">b<span>.</span></span>billions<span className="brand-dot">®</span></a>
+      <a className="brand auth-brand" href="/" aria-label="Naxium home"><img src="/naxium/logo_badge.svg" alt="" width="34" height="34" />naxium</a>
       <h1>{title}<span>.</span></h1>
       <p className="auth-lede">{lede}</p>
       {children}
@@ -45,7 +45,7 @@ export function AuthScreen({ notice, canEmail }: { notice?: string; canEmail: bo
       await api(signup ? "/api/auth/signup" : "/api/auth/login", { method: "POST", body: JSON.stringify(signup ? { email, password, businessName } : { email, password }) });
       window.location.reload();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "We couldn’t reach Billions. Check your connection and try again.");
+      setError(e instanceof ApiError ? e.message : "We couldn’t reach Naxium. Check your connection and try again.");
       setPending(false);
     }
   }
@@ -54,7 +54,7 @@ export function AuthScreen({ notice, canEmail }: { notice?: string; canEmail: bo
 
   return <AuthCard title={COPY[mode].title} lede={COPY[mode].lede}>
     {notice && !error && !forgot && <div className="info-card" role="status">{notice}</div>}
-    {forgot && sent ? <div className="info-card" role="status">If {email.trim()} has a Billions account, a reset link is on its way. It works once and expires in 30 minutes. Check your spam folder if it hasn’t arrived in a few minutes.</div>
+    {forgot && sent ? <div className="info-card" role="status">If {email.trim()} has a Naxium account, a reset link is on its way. It works once and expires in 30 minutes. Check your spam folder if it hasn’t arrived in a few minutes.</div>
       : <form onSubmit={submit} noValidate={false}>
         {signup && <><label htmlFor="business-name">Business name</label><input id="business-name" value={businessName} onChange={e => setBusinessName(e.target.value)} maxLength={80} required autoComplete="organization" /></>}
         <label htmlFor="email">Email</label><input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} maxLength={254} required autoComplete="email" />
@@ -65,7 +65,7 @@ export function AuthScreen({ notice, canEmail }: { notice?: string; canEmail: bo
         <button className="primary-button auth-submit" type="submit" disabled={pending}>{pending ? "One moment…" : COPY[mode].submit} <ArrowRight size={16} /></button>
         {signup && <p className="auth-legal">By creating a workspace you agree to the <a href="/terms" target="_blank">Terms of Service</a> and <a href="/privacy" target="_blank">Privacy Policy</a>.</p>}
       </form>}
-    <button className="auth-switch" onClick={() => switchTo(signup || forgot ? "signin" : "signup")}>{signup || forgot ? "Already have an account? Sign in" : "New to Billions? Create a workspace"}</button>
-    <p className="auth-note"><ShieldCheck size={13} /> Your uploaded files are never stored. Each business only ever sees its own reports. <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
+    <button className="auth-switch" onClick={() => switchTo(signup || forgot ? "signin" : "signup")}>{signup || forgot ? "Already have an account? Sign in" : "New to Naxium? Create a workspace"}</button>
+    <p className="auth-note"><ShieldCheck size={13} /> Uploads are temporary unless you explicitly save a workspace. Saved work belongs to your business. <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
   </AuthCard>;
 }

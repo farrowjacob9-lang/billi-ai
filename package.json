@@ -1,5 +1,5 @@
 {
-  "name": "billions",
+  "name": "naxium-workspace",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,15 +13,18 @@
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "test:e2e": "next build && playwright test",
-    "db:migrate": "node --experimental-strip-types scripts/migrate.ts"
+    "db:migrate": "node --experimental-strip-types scripts/migrate.ts",
+    "eval:spreadsheet": "node --experimental-strip-types eval/spreadsheet.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",
     "@neon/config": "^1.9.2",
     "@neon/env": "^1.6.3",
+    "@react-pdf/renderer": "^4.5.1",
     "@vercel/functions": "^3.10.1",
     "decimal.js": "^10.6.0",
     "exceljs": "^4.4.0",
+    "inngest": "^4.2.4",
     "lucide-react": "1.58.0",
     "next": "16.4.2",
     "pg": "^8.23.1",
@@ -29,6 +32,7 @@
     "react-dom": "19.3.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.3.14",
     "@playwright/test": "^1.56.0",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.23.1",

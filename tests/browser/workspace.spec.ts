@@ -4,7 +4,7 @@ test("sample report, checks, download, routine and history work across refresh",
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Make room for your best work." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Work with your data" })).toBeVisible();
   await page.screenshot({ path: "/tmp/billions-desktop.png", fullPage: true });
   // The conversation has the page to itself until a report exists, then shares it.
   await expect(page.getByRole("region", { name: "Report" })).toHaveCount(0);
@@ -44,7 +44,7 @@ test("real uploaded data drives calculations, errors stop invalid reports", asyn
   await page.getByRole("button", { name: "Prepare weekly report", exact: true }).click();
   await expect(page.getByRole("button", { name: "Download report" })).toBeVisible();
   await expect(page.getByText("$1,200.25", { exact: true })).toBeVisible();
-  await page.getByLabel("Message Billions").fill("Break down my expenses");
+  await page.getByLabel("Message Naxium").fill("Break down my expenses");
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(page.getByText(/Your expenses total \$50.25/)).toBeVisible();
   await page.getByLabel("Upload spreadsheet").setInputFiles({ name: "invalid.csv", mimeType: "text/csv", buffer: Buffer.from("date,amount\n2026-10-05") });
@@ -62,10 +62,10 @@ test("the app has icons, and the logo and breadcrumb return to Overview without 
   await page.evaluate(() => { (window as unknown as { marker: boolean }).marker = true; });
   await page.getByRole("navigation").getByRole("button", { name: /Routines/ }).click();
   await page.getByRole("button", { name: "Workspace", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Make room for your best work." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Work with your data" })).toBeVisible();
   await page.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();
-  await page.getByRole("link", { name: "Billions overview" }).click();
-  await expect(page.getByRole("heading", { name: "Make room for your best work." })).toBeVisible();
+  await page.getByRole("link", { name: "Naxium overview" }).click();
+  await expect(page.getByRole("heading", { name: "Work with your data" })).toBeVisible();
   expect(await page.evaluate(() => (window as unknown as { marker?: boolean }).marker)).toBe(true);
   await expect(page.locator(".workspace-picker svg")).toHaveCount(0);
 });

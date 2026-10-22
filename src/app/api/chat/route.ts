@@ -1,3 +1,4 @@
+import { aiContext } from "@/server/metering";
 import { requireAiAccess } from "@/server/access";
 import { answerQuestion, type ChatTurn } from "@/server/ai";
 import { HttpError, ok, readJson, route } from "@/server/http";
@@ -12,6 +13,6 @@ export const POST = route(async request => {
   const report = isReport(body.report) && isConsistentReport(body.report) ? body.report : null;
   // Long turns are shortened rather than dropped, so the model keeps the thread of the conversation.
   const history = Array.isArray(body.history) ? body.history.filter(isTurn).slice(-8).map(t => ({ role: t.role, text: t.text.slice(0, 2000) })) : [];
-  await requireAiAccess();
-  return ok({ reply: await answerQuestion(question, report, history, request.signal) });
+  const session = await requireAiAccess();
+  return ok({ reply: await aiContext.run({businessId:session?.businessId??"",operation:"report-question"},()=>answerQuestion(question, report, history, request.signal)) });
 });

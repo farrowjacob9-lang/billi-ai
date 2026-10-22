@@ -6,16 +6,16 @@ export function modeCopy(caps: Capabilities) {
   const cloud = caps.mode === "cloud" && caps.user;
   const business = caps.user?.businessName || "your business";
   const privacyNote = cloud
-    ? `Files are checked on our server and never stored. Reports are saved to ${business} only.${caps.ai ? " Claude sees the calculated totals, not your transactions." : ""}`
-    : caps.ai ? "Files are processed in your browser. Only the calculated totals are sent to Claude." : "Files are processed locally. No AI provider is connected yet.";
+    ? `Original files are not retained. Explicitly saved workspaces keep parsed cells and conversation for 30 days. Reports are saved to ${business} only.${caps.ai ? " Claude sees the calculated totals, not your transactions." : ""}`
+    : caps.ai ? "Excel is parsed on our server; CSV in your browser. Only the calculated report totals are sent to Claude." : "Excel is parsed on our server; CSV in your browser. No AI provider is connected yet.";
   const storageNote = cloud
     ? `History and routines are saved to ${business}. Uploaded source files are not saved.`
     : "History and routine settings are stored only in this browser. Uploaded source files are not saved.";
-  const routinesBanner = `Routines save the report format and validation rules ${cloud ? `to ${business}` : "in this browser"}. Each run needs a new CSV. Scheduling and shared routines are part of a future release.`;
+  const routinesBanner = `Routines save the report format and validation rules ${cloud ? `to ${business}` : "in this browser"}. Each run needs a new CSV. For saved spreadsheet calculations and scheduling, use Saved work, exports & routines.`;
   const settings: SettingsInfo = {
     intro: cloud
       ? `You’re signed in to ${business}. CSV reports are checked and stored for this business only.`
-      : `You’re exploring the first Billions prototype. CSV reporting works locally; ${caps.ai ? "Claude writes the report summary and answers questions from the calculated totals." : "the chat uses a limited set of report helpers."}`,
+      : `You’re exploring the first Naxium prototype. CSV reporting works locally; ${caps.ai ? "Claude writes the report summary and answers questions from the calculated totals." : "the chat uses a limited set of report helpers."}`,
     rows: [
       ["Data processing", cloud ? "Checked on the server" : "In your browser"],
       ["Report narrative", caps.ai ? "Claude, figures verified" : "Deterministic template"],
@@ -24,7 +24,7 @@ export function modeCopy(caps: Capabilities) {
       ...(cloud && caps.email ? [["Email", caps.user!.emailVerified ? "Confirmed" : "Not confirmed yet"] as [string, string]] : []),
     ],
     footnote: cloud
-      ? "Report summaries stay in your business workspace until you clear them. Your uploaded files are never kept."
+      ? "Weekly summaries stay until deleted. Saved spreadsheet workspaces expire after 30 days; original upload binaries are not retained."
       : "Use sample or non-sensitive data on shared devices. Report summaries in history persist in browser storage until cleared.",
     routineStorage: cloud ? `saved to ${business}` : "saved in this browser",
   };

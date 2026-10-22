@@ -1,0 +1,18 @@
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="naxpt_n" x1="60" y1="20" x2="60" y2="104" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#CED4D2"></stop>
+      <stop offset="0.55" stop-color="#9AA5A3"></stop>
+      <stop offset="1" stop-color="#74807D"></stop>
+    </linearGradient>
+    <linearGradient id="naxpt_ring" x1="20" y1="20" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C2C9C6"></stop>
+      <stop offset="0.5" stop-color="#828F91"></stop>
+      <stop offset="1" stop-color="#D6DBD8"></stop>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="88" height="88" rx="26" fill="#1B1F21" stroke="url(#naxpt_ring)" stroke-width="4.5"></rect>
+  <line x1="44" y1="42" x2="44" y2="78" stroke="url(#naxpt_n)" stroke-width="9" stroke-linecap="round"></line>
+  <line x1="76" y1="42" x2="76" y2="78" stroke="url(#naxpt_n)" stroke-width="9" stroke-linecap="round"></line>
+  <line x1="44" y1="42" x2="76" y2="78" stroke="url(#naxpt_n)" stroke-width="9" stroke-linecap="round"></line>
+</svg>
