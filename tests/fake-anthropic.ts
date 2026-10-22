@@ -9,6 +9,12 @@ type Body = { system?: string; messages?: { role: string; content: string }[] };
 
 function reply(body: Body): string {
   const last = String(body.messages?.at(-1)?.content ?? "");
+  if (body.system?.includes("Translate a spreadsheet question")) {
+    const request = JSON.parse(last);
+    if (/invent/i.test(request.question)) return JSON.stringify({ operation: "sum", column: "Imaginary" });
+    if (/largest/i.test(request.question)) return JSON.stringify({ operation: "rows", column: "Amount", direction: "asc", limit: 1 });
+    return JSON.stringify({ operation: "sum", column: "Amount", groupBy: "Category" });
+  }
   const hasReport = /<facts>\{/.test(last);
   if (/<question>.*invent/is.test(last)) return "Your income grew 37% to $99,999.99 compared with last week.";
   if (!hasReport) return "Upload a CSV with date, description, category and amount columns, covering up to {maxDays} days.";

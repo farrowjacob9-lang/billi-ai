@@ -24,7 +24,7 @@ export default defineConfig({
   },
   projects: [
     { name: "browser-only", testMatch: "workspace.spec.ts", use: { baseURL: "http://127.0.0.1:3000" } },
-    { name: "with-model", testMatch: "model.spec.ts", use: { baseURL: "http://127.0.0.1:3002" } },
+    { name: "with-model", testMatch: ["model.spec.ts", "spreadsheet.spec.ts"], use: { baseURL: "http://127.0.0.1:3002" } },
     // A hosted database (Neon) adds network round trips and cold starts, so allow longer waits.
     ...(accounts ? [{ name: "accounts", testMatch: "accounts.spec.ts", use: { baseURL: "http://127.0.0.1:3001" }, expect: { timeout: 15_000 }, timeout: 90_000 }] : []),
   ],

@@ -60,3 +60,13 @@
 .workspace-grid.split .report-column{animation:report-in .35s ease-out}
 @keyframes report-in{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
 @media(max-width:1000px){@keyframes report-in{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}}
+
+.sheet-card { min-width: 0; padding: 24px; border: 1px solid var(--border, #e5e5e5); border-radius: 16px; background: white; }
+.sheet-card p { font-size: 13px; line-height: 1.6; color: #666; margin: 16px 0; }
+.sheet-card label { display: block; font-weight: 600; margin-bottom: 8px; }
+.sheet-card select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: white; }
+.sheet-scroll { overflow: auto; max-height: 420px; }
+.sheet-scroll table { border-collapse: collapse; font-size: 12px; width: 100%; }
+.sheet-scroll th, .sheet-scroll td { text-align: left; padding: 10px; border-bottom: 1px solid #eee; min-width: 90px; max-width: 260px; overflow-wrap: anywhere; }
+.sheet-scroll th { background: #f7f7f5; }
+.message-list .message > div { white-space: pre-wrap; overflow-wrap: anywhere; }

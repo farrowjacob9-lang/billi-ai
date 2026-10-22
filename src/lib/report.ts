@@ -31,12 +31,12 @@ export const SAMPLE_CSV = `date,description,category,amount
 2026-10-11,Equipment,Operations,-1200.00`;
 
 // Parse quoted CSV fields without splitting commas or newlines inside quotes.
-export function parseCsv(input: string): string[][] {
+export function parseCsv(input: string, preserveEmptyRows = false): string[][] {
   const text = input.replace(/^\uFEFF/, "");
   const rows: string[][] = [];
   let row: string[] = [], field = "", quoted = false, closed = false;
   const finishField = () => { row.push(field); field = ""; closed = false; };
-  const finishRow = () => { finishField(); if (row.some(value => value.trim() !== "")) rows.push(row); row = []; };
+  const finishRow = () => { finishField(); if (preserveEmptyRows || row.some(value => value.trim() !== "")) rows.push(row); row = []; };
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
     if (quoted) {

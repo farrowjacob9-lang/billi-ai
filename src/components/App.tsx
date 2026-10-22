@@ -15,9 +15,10 @@ import { createReport, reportMarkdown, SAMPLE_CSV, type Report } from "@/lib/rep
 import { AuthScreen } from "@/components/AuthScreen";
 import { api, ApiError, cloudStore, localStore, SIGNED_OUT_EVENT, type Capabilities } from "@/lib/store";
 import type { Message, Modal, Routine, UiError, View } from "@/lib/types";
+import { readSpreadsheet } from "@/lib/read-workbook";
+import { executePlan, simplePlan, type Sheet } from "@/lib/sheet";
 
 const pause = () => new Promise(resolve => setTimeout(resolve, 180));
-const MAX_BYTES = 2 * 1024 * 1024;
 
 // A rejected file is the user's to fix; anything else is the session or our side.
 function uiError(e: unknown): UiError {
@@ -34,6 +35,9 @@ function uiError(e: unknown): UiError {
 export function App({ caps }: { caps: Capabilities }) {
   const [view, setView] = useState<View>("workspace");
   const [report, setReport] = useState<Report | null>(null);
+  const [sheets, setSheets] = useState<Sheet[]>([]);
+  const [sheetIndex, setSheetIndex] = useState(0);
+  const sheet = sheets[sheetIndex] ?? null;
   const [runs, setRuns] = useState<Report[]>([]);
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -76,8 +80,8 @@ export function App({ caps }: { caps: Capabilities }) {
   const say = (role: Message["role"], text: string, kind?: Message["kind"]) => setMessages(previous => [...previous, { id: Date.now() + Math.random(), role, text, kind }]);
   function navigate(next: View) { setView(next); setMobileNav(false); }
   function cancelRun() { operation.current++; abort.current?.abort(); setBusy(false); }
-  function openRun(run: Report, clearMessages: boolean) { cancelRun(); conversation.current++; setReplying(false); setReport(run); setError(null); if (clearMessages) setMessages([]); navigate("workspace"); }
-  function newConversation() { conversation.current++; setReplying(false); cancelRun(); setReport(null); setMessages([]); setError(null); navigate("workspace"); }
+  function openRun(run: Report, clearMessages: boolean) { cancelRun(); conversation.current++; setSheets([]); setReplying(false); setReport(run); setError(null); if (clearMessages) setMessages([]); navigate("workspace"); }
+  function newConversation() { conversation.current++; setReplying(false); cancelRun(); setReport(null); setSheets([]); setMessages([]); setError(null); navigate("workspace"); }
 
   async function runCsv(csv: string, fileName: string) {
     cancelRun(); conversation.current++; setReplying(false);
@@ -93,7 +97,7 @@ export function App({ caps }: { caps: Capabilities }) {
       setStage(2);
       const [{ report: result, saved }] = await Promise.all([store.createRun(csv, fileName, local, controller.signal), pause()]);
       if (stale()) return;
-      setReport(result);
+      setReport(result); setSheets([]);
       setRuns(previous => [result, ...previous.filter(r => r.id !== result.id)].slice(0, 30));
       if (!saved) setToast("Browser storage is unavailable. You can still download this report, but history won’t survive a refresh.");
       say("assistant", `Your report is ready. I checked all ${result.rowCount} transactions and reconciled the totals. Review the report and its checks on the right. Your original file is unchanged.`, "run");
@@ -105,15 +109,35 @@ export function App({ caps }: { caps: Capabilities }) {
 
   async function upload(file: File) {
     if (busy) return;
-    if (!file.name.toLowerCase().endsWith(".csv")) { setError({ kind: "file", message: "Choose a .csv file. Excel files aren’t supported in this first version; export the sheet as CSV first." }); navigate("workspace"); return; }
-    if (file.size > MAX_BYTES) { setError({ kind: "file", message: "This file is larger than 2 MB. Upload a smaller weekly export." }); navigate("workspace"); return; }
-    let text: string;
-    try { text = await file.text(); } catch { setError({ kind: "file", message: "The file could not be opened. Please select it again." }); return; }
-    await runCsv(text, file.name);
+    cancelRun(); conversation.current++; setReplying(false); setBusy(true); setStage(0); setError(null); navigate("workspace");
+    const current = operation.current;
+    try {
+      const loaded = await readSpreadsheet(file);
+      if (current !== operation.current) return;
+      setSheets(loaded); setSheetIndex(0); setReport(null); setMessages([]);
+      say("user", `Work with ${file.name}.`, "run");
+      say("assistant", `Ready: ${loaded[0].rows.length} rows and ${loaded[0].columns.length} columns in ${loaded[0].name}. Ask for a total, an average, a count, a breakdown by category or matching transactions. Use the exact column headings in your questions. This spreadsheet stays in this conversation until you refresh or start a new one; it isn't saved to history.`, "run");
+    } catch (e) { if (current === operation.current) setError(uiError(e)); }
+    finally { if (current === operation.current) setBusy(false); }
   }
 
   async function send(text: string) {
     say("user", text);
+    if (sheet) {
+      const asked = conversation.current;
+      setReplying(true);
+      let answer: string;
+      try {
+        const plan = simplePlan(text, sheet);
+        if (plan) answer = executePlan(sheet, plan);
+        else if (caps.ai) {
+          const history = messages.filter(m => m.role === "user" && m.kind !== "run").slice(-6).map(m => m.text);
+          answer = (await api<{ reply: string }>("/api/sheet-question", { method: "POST", body: JSON.stringify({ sheet, question: text, history }) })).reply;
+        } else answer = `Open-ended questions need an AI connection on this deployment. You can still ask “how many rows”, “total ${sheet.columns[0]}” or “average ${sheet.columns[0]}” (use a numeric column for totals and averages).`;
+      } catch (e) { answer = e instanceof Error ? e.message : "The question couldn't be answered. Try again."; }
+      if (conversation.current !== asked) return;
+      setReplying(false); say("assistant", answer); return;
+    }
     if (!caps.ai) { say("assistant", localReply(text, report)); return; }
     const asked = conversation.current, about = report;
     setReplying(true);
@@ -186,7 +210,7 @@ export function App({ caps }: { caps: Capabilities }) {
     window.location.reload();
   }
 
-  const runSample = () => void runCsv(SAMPLE_CSV, "sample-week.csv");
+  const runSample = () => { setSheets([]); void runCsv(SAMPLE_CSV, "sample-week.csv"); };
   if (signedOut) return <AuthScreen canEmail={caps.email} notice={sessionEnded ? "Your session has ended. Sign in again to pick up where you left off." : undefined} />;
   const unverified = caps.email && caps.user && !caps.user.emailVerified;
   const title = view === "routines" ? "Your routines" : view === "history" ? "Run history" : "Overview";
@@ -199,7 +223,7 @@ export function App({ caps }: { caps: Capabilities }) {
       <header className="topbar"><div className="breadcrumb"><button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMobileNav(true)}><Menu size={20} /></button><button className="breadcrumb-link" onClick={() => navigate("workspace")}>Workspace</button><ChevronRight size={14} /><strong>{title}</strong></div><div className="topbar-right"><span className="prototype-badge"><span /> {copy.badge}</span><button className="icon-button" aria-label="Workspace settings" onClick={() => setModal("settings")}><Settings2 size={18} /></button></div></header>
       <div className="page-content">
         {unverified && <div className="verify-banner" role="status"><MailCheck size={18} /><p>Confirm your email to turn on the AI assistant. We sent a link to <strong>{caps.user!.email}</strong>. Reports work in the meantime.</p><button className="secondary-button" onClick={() => void resendVerification()}>Send a new link</button></div>}
-        {view === "workspace" ? <WorkspaceView report={report} messages={messages} busy={busy} replying={replying} stage={stage} error={error} privacyNote={copy.privacyNote} modeLabel={copy.modeLabel}
+        {view === "workspace" ? <WorkspaceView onPrepareSheetReport={() => { if (!sheet) return; const csv = [sheet.columns, ...sheet.rows].map(row => row.map(c => '"' + String(c ?? "").replaceAll('"', '""') + '"').join(",")).join("\n"); void runCsv(csv, sheet.name); }} sheet={sheet} sheets={sheets} sheetIndex={sheetIndex} onSelectSheet={index => { conversation.current++; setReplying(false); setSheetIndex(index); setMessages([]); setError(null); }} report={report} messages={messages} busy={busy} replying={replying} stage={stage} error={error} privacyNote={sheet ? "Spreadsheet rows stay in this tab until you ask a question. For AI questions, rows are calculated on our server; Claude receives column headings and your questions only. The spreadsheet is not saved." : copy.privacyNote} modeLabel={copy.modeLabel}
           onPickFile={() => fileInput.current?.click()} onUpload={file => void upload(file)} onRunSample={runSample} onCancel={() => { cancelRun(); setToast("Report cancelled. Your file is unchanged."); }} onDismissError={() => setError(null)}
           onSend={text => void send(text)} onDownloadReport={() => { if (report) download(`billions-report-${report.startDate}.md`, reportMarkdown(report), "text/markdown"); }}
           onDownloadSample={() => download("billions-sample.csv", SAMPLE_CSV, "text/csv")} onSaveRoutine={() => setModal("routine")} onViewRoutines={() => navigate("routines")} />
@@ -208,7 +232,7 @@ export function App({ caps }: { caps: Capabilities }) {
       </div>
     </main>
 
-    <input className="sr-only" type="file" accept=".csv,text/csv" aria-label="Upload weekly CSV" ref={fileInput} onChange={e => { const file = e.target.files?.[0]; if (file) void upload(file); e.target.value = ""; }} />
+    <input className="sr-only" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-label="Upload spreadsheet" ref={fileInput} onChange={e => { const file = e.target.files?.[0]; if (file) void upload(file); e.target.value = ""; }} />
     <AppDialog modal={modal} settings={copy.settings} businessName={copy.workspaceName} onClose={() => setModal(null)} onOpen={setModal} onSaveRoutine={saveRoutine} onManageHistory={() => { setModal(null); navigate("history"); }} onSignOut={caps.user ? () => void signOut() : undefined} account={account} />
     {toast && <Toast text={toast} onDismiss={() => setToast("")} />}
   </div>;

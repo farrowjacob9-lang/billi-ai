@@ -40,16 +40,16 @@ test("sample report, checks, download, routine and history work across refresh",
 
 test("real uploaded data drives calculations, errors stop invalid reports", async ({ page }) => {
   await page.goto("/");
-  await page.getByLabel("Upload weekly CSV").setInputFiles({ name: "my-week.csv", mimeType: "text/csv", buffer: Buffer.from("date,description,category,amount\n2026-10-05,Consulting,Sales,1250.50\n2026-10-06,Travel,Operations,-50.25") });
+  await page.getByLabel("Upload spreadsheet").setInputFiles({ name: "my-week.csv", mimeType: "text/csv", buffer: Buffer.from("date,description,category,amount\n2026-10-05,Consulting,Sales,1250.50\n2026-10-06,Travel,Operations,-50.25") });
+  await page.getByRole("button", { name: "Prepare weekly report", exact: true }).click();
   await expect(page.getByRole("button", { name: "Download report" })).toBeVisible();
   await expect(page.getByText("$1,200.25", { exact: true })).toBeVisible();
   await page.getByLabel("Message Billions").fill("Break down my expenses");
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(page.getByText(/Your expenses total \$50.25/)).toBeVisible();
-  await page.getByLabel("Upload weekly CSV").setInputFiles({ name: "invalid.csv", mimeType: "text/csv", buffer: Buffer.from("date,amount\n2026-10-05,10") });
-  await expect(page.getByRole("region", { name: "Conversation workspace" }).getByRole("alert")).toContainText("Missing description, category columns");
+  await page.getByLabel("Upload spreadsheet").setInputFiles({ name: "invalid.csv", mimeType: "text/csv", buffer: Buffer.from("date,amount\n2026-10-05") });
+  await expect(page.getByRole("region", { name: "Conversation workspace" }).getByRole("alert")).toContainText("CSV rows have different numbers of fields");
   await expect(page.getByRole("region", { name: "Conversation workspace" }).getByRole("alert")).toContainText("Let’s check that file.");
-  await expect(page.getByRole("button", { name: "Download report" })).toHaveCount(0);
   await page.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();
   await expect(page.getByRole("button", { name: /my-week.csv/ }).last()).toBeVisible();
   await expect(page.getByRole("button", { name: /invalid.csv/ })).toHaveCount(0);
@@ -73,7 +73,8 @@ test("the app has icons, and the logo and breadcrumb return to Overview without 
 test("one report can be deleted from run history, leaving the rest", async ({ page }) => {
   await page.goto("/");
   for (const name of ["first.csv", "second.csv"]) {
-    await page.getByLabel("Upload weekly CSV").setInputFiles({ name, mimeType: "text/csv", buffer: Buffer.from("date,description,category,amount\n2026-10-05,Consulting,Sales,100.00") });
+    await page.getByLabel("Upload spreadsheet").setInputFiles({ name, mimeType: "text/csv", buffer: Buffer.from("date,description,category,amount\n2026-10-05,Consulting,Sales,100.00") });
+    await page.getByRole("button", { name: "Prepare weekly report", exact: true }).click();
     await expect(page.getByRole("button", { name: "Download report" })).toBeVisible();
   }
   await page.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();
