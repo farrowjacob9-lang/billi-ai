@@ -99,5 +99,5 @@ test('Naxium saved work survives refresh, keeps review decisions, and exports Ex
  await expect(page.getByLabel('Saved workspaces').locator('option')).toHaveCount(1);
  await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await expect.poll(async()=>((await page.locator('.sidebar').boundingBox())?.x??0)+224).toBeLessThanOrEqual(1);
- await page.screenshot({path:'/workspace/artifacts/naxium-workspace-mobile.png',fullPage:true});
+ await page.screenshot({path:test.info().outputPath('naxium-workspace-mobile.png'),fullPage:true});
 });
