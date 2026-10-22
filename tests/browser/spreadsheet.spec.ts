@@ -90,10 +90,12 @@ test('Naxium saved work survives refresh, keeps review decisions, and exports Ex
  }
  await page.getByRole('button',{name:'Dark theme',exact:true}).click();await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
  await page.reload();
- await page.getByText('Saved work, exports & routines',{exact:true}).click();
- await page.getByLabel('Saved workspaces').selectOption({label:'Tricky financial review'});
+ await page.getByRole('navigation',{name:'Saved workspaces'}).getByRole('button',{name:'Tricky financial review',exact:true}).click();
  await expect(page.getByRole('region',{name:'Spreadsheet preview'})).toBeVisible();
  await expect(page.getByRole("region", {name:"Conversation workspace"}).getByText(/All rows: 9,808.97/).first()).toBeVisible();
+ await expect(page.locator('.workspace-tools')).not.toHaveAttribute('open', '');
+ await expect(page.getByText('Opened Tricky financial review. Your spreadsheet and conversation are ready.')).toBeVisible();
+ await page.getByText('Saved work, exports & routines',{exact:true}).click();
  await page.getByText('Review answers',{exact:true}).click();await expect(page.getByText('approved',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Delete saved workspace',exact:true}).click();
  await expect(page.getByLabel('Saved workspaces').locator('option')).toHaveCount(1);

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, type Capabilities } from "@/lib/store";
 import {
   validateSnapshot,
@@ -72,6 +72,7 @@ export function WorkspaceTools({
   onReview: (id: number, d: Decision) => void;
   onNotice: (s: string) => void;
 }) {
+  const toolsRef = useRef<HTMLDetailsElement>(null);
   const [saved, setSaved] = useState<Saved[]>([]),
     [active, setActive] = useState(""),
     [name, setName] = useState(""),
@@ -184,6 +185,11 @@ export function WorkspaceTools({
     onRestore(validateSnapshot(data.snapshot));
     setActive(id);
     setName(data.name);
+    if (toolsRef.current) toolsRef.current.open = false;
+    onNotice(`Opened ${data.name}. Your spreadsheet and conversation are ready.`);
+    requestAnimationFrame(() => {
+      document.querySelector(".page-heading")?.scrollIntoView({ block: "start" });
+    });
   }
   async function remove(id: string) {
     if (cloud) await api("/api/workspaces/" + id, { method: "DELETE" });
@@ -236,7 +242,13 @@ export function WorkspaceTools({
     await refreshRoutines();
   }
   return (
-    <details className="workspace-tools">
+    <>
+    {saved.length > 0 && <nav aria-label="Saved workspaces" className="saved-work-shortcuts">
+      <strong>Saved work</strong>
+      {saved.map(w => <button key={w.id} className="secondary-button" disabled={working} aria-current={active === w.id ? "page" : undefined} onClick={() => void perform(() => open(w.id))}>{w.name}</button>)}
+      {working && <span role="status">Loading…</span>}
+    </nav>}
+    <details ref={toolsRef} className="workspace-tools">
       <summary>Saved work, exports & routines</summary>
       <div className="tools-row">
         <strong>Your workspace</strong>
@@ -247,6 +259,7 @@ export function WorkspaceTools({
       <div className="tools-row">
         <select
           aria-label="Saved workspaces"
+          disabled={working}
           value={active}
           onChange={(e) => {
             if (e.target.value) void perform(() => open(e.target.value));
@@ -490,6 +503,7 @@ export function WorkspaceTools({
         )}
       </details>
     </details>
+    </>
   );
 }
 function AnswerReview({

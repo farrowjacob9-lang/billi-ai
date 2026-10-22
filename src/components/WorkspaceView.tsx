@@ -33,7 +33,7 @@ export function WorkspaceView(props: Props) {
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
   const messageEnd = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (messages.length) messageEnd.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, [messages]);
+  useEffect(() => { if (messages.length) { const body = messageEnd.current?.closest(".conversation-body"); if (body) body.scrollTop = body.scrollHeight; } }, [messages]);
 
   function send(event: FormEvent) {
     event.preventDefault(); const text = draft.trim(); if (!text || busy || replying) return;

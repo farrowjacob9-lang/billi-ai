@@ -148,3 +148,8 @@
 .report-cover { background:var(--mint); color:var(--ink); }
 .report-cover h2,.report-cover p,.report-cover span { color:var(--ink); }
 @media(max-width:760px) { .sidebar:not(.mobile-open) { transform:translateX(-100%); } .sidebar.mobile-open { transform:translateX(0); } .mobile-menu { display:flex; } }
+
+.saved-work-shortcuts { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; margin-bottom: 1rem; }
+.saved-work-shortcuts > strong { margin-right: .35rem; }
+.saved-work-shortcuts button { max-width: 100%; overflow-wrap: anywhere; }
+.saved-work-shortcuts button[aria-current="page"] { border-color: currentColor; font-weight: 600; }
