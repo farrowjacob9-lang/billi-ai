@@ -2,6 +2,7 @@ import { databaseConfigured } from "@/server/db";
 import { HttpError, ok, readJson, requireSession, route } from "@/server/http";
 import { parseWorkbook } from "@/server/read-workbook";
 import { MAX_SHEET_BYTES } from "@/lib/sheet";
+import { WorkbookReadError } from "@/lib/workbook-error";
 
 export const runtime = "nodejs";
 
@@ -17,5 +18,10 @@ export const POST = route(async request => {
     const sheets = await parseWorkbook(Uint8Array.from(bytes).buffer, body.fileName);
     if (Buffer.byteLength(JSON.stringify(sheets)) > MAX_SHEET_BYTES) throw new Error("The extracted workbook exceeds 2 MB. Export only the sheet you need.");
     return ok({ sheets });
-  } catch (e) { throw new HttpError(422, "invalid_workbook", e instanceof Error ? e.message : "The workbook couldn't be read. Try a fresh .xlsx export."); }
+  } catch (e) {
+    if (e instanceof WorkbookReadError) throw new HttpError(
+      ["encrypted", "archive", "xml"].includes(e.kind) ? 422 : 503,
+      "workbook_reader", e.message);
+    throw new HttpError(422, "invalid_workbook", e instanceof Error ? e.message : "The workbook couldn't be read. Try a fresh .xlsx export.");
+  }
 });
