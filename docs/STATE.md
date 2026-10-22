@@ -1,4 +1,47 @@
-# Session state
+# Current checkpoint — 22 Oct 2026
+
+Branch: `spreadsheet-questions`. Draft PR: https://github.com/farrowjacob9-lang/billi-ai/pull/2 (includes the earlier account foundation). Latest implementation commit: `57b8780`.
+
+Preview: https://billi-ai-git-spreadsheet-questions-naxium-langs-projects.vercel.app/
+
+## Confirmed by the user in the hosted preview
+
+- Signed in successfully after password recovery.
+- Naxium branding and neutral styling deployed.
+- `billions-tricky-test.csv` loaded: 18 rows, 6 columns.
+- Total Amount: 9,808.97 across all 18 rows, immediate response.
+- Posted Amount: 1,208.97 across 14 rows, about 3 seconds.
+- Posted Travel Amount: -200 across 3 rows, about 4 seconds.
+- Workspace saved for 30 days and reopened after refresh, preserving data and conversation.
+- Reopening UX improved and user confirmed “okay better”: saved work is visible above the tools panel; one-click restore closes tools and returns to the workspace heading; conversation scrolling stays inside its panel.
+- Neon migration `005_workspaces.sql` manually applied and recorded in `schema_migrations`.
+
+## Implemented on this branch
+
+CSV and Excel ingestion, validated AI calculation plans executed in code, source/filter evidence, optional saved workspaces, answer review decisions, Excel/PDF exports, light/dark theme, AI token activity and allowance, manual calculation routines and optional Inngest schedules. Saved work has 30-day retention. Source files are not retained; explicitly saved work retains parsed cells/conversation.
+
+Reused suitable Naxium brand assets and email layout from retired `farrowjacob9-lang/naxium-app`; did not move its construction engine or domain bindings.
+
+## Verification and limits
+
+Latest UX change: typecheck and production build passed; targeted browser test passed, covering refresh/reopen, reviewed answers and Excel/PDF exports. Earlier full browser suite: 16 passed; unit suite: 24 passed, 19 database-dependent skips; offline calculation evaluations: 25 passed. These local evaluations do not prove every natural-language interpretation.
+
+Excel upload previously failed for the user's `billions-tricky-test.xlsx`. Server-side parsing and externalized ExcelJS fixes are deployed and fixture tests pass locally, but hosted Excel success remains UNCONFIRMED. Do not mark fixed based on CSV success. Reader failures now have a safe diagnostic reference.
+
+## Next steps
+
+1. Confirm hosted `.xlsx` upload works; if it fails, collect the new diagnostic reference and investigate hosting logs when available.
+2. Follow `docs/NAXIUM-SETUP.md` for production release, domain cutover and Resend. Domain and email changes remain pending; existing domain bindings have not been changed.
+3. Review/merge PR #2 to main and confirm production before moving `naxium.app` and `www`. Keep the retired deployment available for rollback.
+4. Configure Resend together: `RESEND_API_KEY`, `EMAIL_FROM`, `BILLIONS_APP_URL`; redeploy and test recovery/verification. Do not put secrets in repository or chat.
+5. Optional: configure dedicated Inngest keys/environment and sync `/api/inngest`; test scheduling. No automatic report email delivery exists yet.
+6. Fill/review draft legal pages before public launch. Change the temporary testing password when testing finishes.
+
+The earlier checkpoint below is historical; its “Later” and release status are superseded by this checkpoint. Unresolved account/security items in it have not been independently reverified or silently marked complete.
+
+---
+
+# Earlier checkpoint — 17 Oct 2026
 
 Read this first. Last updated 17 Oct 2026. Branch: `claude/serene-albattani-sqwi7a` (PR open: https://github.com/farrowjacob9-lang/billi-ai/pull/1, waiting on the operator to merge).
 
