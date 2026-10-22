@@ -53,3 +53,22 @@ test("spreadsheet endpoint enforces AI access and rejects cross-site requests", 
   const invalid = await request.post("/api/sheet-question", { data: { ...body, sheet: { name: "x", columns: ["Amount"], rows: [[{}]] } } });
   expect(invalid.status()).toBe(422);
 });
+
+test("the downloadable tricky workbook opens with formatting, filters and two sheets", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Upload spreadsheet").setInputFiles("tests/tricky-transactions.xlsx");
+  await expect(page.getByRole("region", { name: "Spreadsheet preview" })).toBeVisible();
+  await expect(page.getByLabel("Active sheet").locator("option")).toHaveCount(2);
+  await page.getByLabel("Message Billions").fill("total Amount");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.getByText(/All rows: 9,808.97/)).toBeVisible();
+});
+
+test("Excel parser refuses malformed uploads and cross-site requests", async ({ request }) => {
+  const malformed = await request.post('/api/spreadsheets', { data: { fileName: 'bad.xlsx', data: 'not base64!' } });
+  expect(malformed.status()).toBe(400);
+  const corrupt = await request.post('/api/spreadsheets', { data: { fileName: 'bad.xlsx', data: Buffer.from('not a workbook').toString('base64') } });
+  expect(corrupt.status()).toBe(422);
+  const crossSite = await request.post('/api/spreadsheets', { data: {}, headers: { origin: 'https://evil.example' } });
+  expect(crossSite.status()).toBe(403);
+});
