@@ -1,0 +1,11 @@
+FICTIONAL TEST RECORD
+Quote 1276 — Dave’s Electrical
+Prepared: 2026-09-15
+Work: Supply and install six interior LED fittings in a small office.
+Labour allowance: 4 hours at AUD 110 per hour = AUD 440.
+Materials allowance: AUD 360.
+Subtotal: AUD 800. GST: AUD 80. Total: AUD 880.
+Exclusions: switchboard upgrades, after-hours work and making good painted surfaces.
+Assumptions: existing wiring is suitable; normal business-hours access; one site visit.
+Acceptance: customer approved the scope by email.
+For reuse: review all rates, quantities, site conditions and exclusions for the new job. Do not reuse the old quote number or customer details.
