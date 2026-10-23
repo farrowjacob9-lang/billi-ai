@@ -1,5 +1,5 @@
 import { makeSheet, type Cell, type Sheet } from "../lib/sheet.ts";
-import { WorkbookReadError, workbookFailureKind } from "../lib/workbook-error.ts";
+import { WorkbookReadError, workbookFailureKind, workbookDiagnostic } from "../lib/workbook-error.ts";
 import { randomUUID } from "node:crypto";
 
 export async function parseWorkbook(buffer: ArrayBuffer, fileName: string, headerRow = 1): Promise<Sheet[]> {
@@ -21,18 +21,21 @@ export async function parseWorkbook(buffer: ArrayBuffer, fileName: string, heade
     offset += 46 + view.getUint16(offset + 28, true) + view.getUint16(offset + 30, true) + view.getUint16(offset + 32, true);
   }
   let workbook: import("exceljs").Workbook;
+  let stage = "module-load";
   try {
     const { default: ExcelJS } = await import("exceljs");
+    stage = "construct";
     workbook = new ExcelJS.Workbook();
     // ExcelJS's declaration calls its input an ArrayBuffer, but its Node entry
     // point supports/recommends Buffer. Avoid browser-style byte dispatch here.
     const bytes = Buffer.from(buffer);
+    stage = "parse";
     await workbook.xlsx.load(bytes as unknown as Parameters<typeof workbook.xlsx.load>[0]);
   } catch (error) {
     const reference = randomUUID().slice(0, 8);
     const kind = workbookFailureKind(error);
     // Do not log the file name, XML, cells, raw parser message or uploaded bytes.
-    console.error("[workbook] read failed", { reference, kind, node: process.version, bytes: buffer.byteLength });
+    console.error("[workbook] read failed", { reference, kind, node: process.version, bytes: buffer.byteLength, ...workbookDiagnostic(error,stage) });
     throw new WorkbookReadError(kind, reference);
   }
   if (workbook.worksheets.length > 20) throw new Error("Choose a workbook with at most 20 sheets.");

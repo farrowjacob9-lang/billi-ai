@@ -22,3 +22,15 @@ export class WorkbookReadError extends Error {
     this.reference = reference;
   }
 }
+
+// Error messages can contain XML/cell values. Keep only allowlisted runtime metadata.
+export function workbookDiagnostic(error: unknown, stage: string) {
+  const names = ["Error", "TypeError", "RangeError", "SyntaxError", "ReferenceError"];
+  const name = error instanceof Error && names.includes(error.name) ? error.name : "unknown";
+  const stack = error instanceof Error ? error.stack ?? "" : "";
+  const frames = stack.split("\n").slice(1).flatMap(line => {
+    const frame = line.match(/node_modules\/(exceljs|jszip|saxes|readable-stream|pako)\/([a-zA-Z0-9_./-]+:\d+:\d+)/);
+    return frame ? [`${frame[1]}/${frame[2]}`] : [];
+  }).slice(0, 5);
+  return {stage, name, frames};
+}

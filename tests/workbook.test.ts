@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { parseWorkbook } from "../src/server/read-workbook.ts";
-import { workbookFailureKind, WorkbookReadError } from "../src/lib/workbook-error.ts";
+import { workbookFailureKind, WorkbookReadError, workbookDiagnostic } from "../src/lib/workbook-error.ts";
 
 test("the actual downloadable workbook parses through the Node reader", async () => {
   const bytes = await readFile(new URL("./tricky-transactions.xlsx", import.meta.url));
@@ -20,3 +20,11 @@ test("runtime failures are not described as password-protected files", () => {
   assert.doesNotMatch(message, /password|SaxesParser/);
   assert.equal(workbookFailureKind(new Error("Encrypted workbook")), "encrypted");
 });
+
+ test("reader diagnostics never log error messages or uploaded content", () => {
+  const error = new Error("private customer cell and XML");
+  error.stack = "Error: private customer cell and XML\n at x (/app/node_modules/exceljs/lib/xlsx/xlsx.js:12:3)\n at privateCustomerFile.xlsx:2:3";
+  const diagnostic = workbookDiagnostic(error,"parse");
+  assert.deepEqual(diagnostic,{stage:"parse",name:"Error",frames:["exceljs/lib/xlsx/xlsx.js:12:3"]});
+  assert.doesNotMatch(JSON.stringify(diagnostic),/private|customer|XML/);
+ });

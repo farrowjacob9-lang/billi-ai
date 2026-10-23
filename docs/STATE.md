@@ -94,3 +94,7 @@ Real routines (link runs, schedule, email delivery), landing page, billing, team
 - Browser tests run against a production build: the Next 16 dev server won't hydrate on 127.0.0.1.
 - Local test Postgres: `initdb` into `/var/tmp/billions-pg`, port 54329, socket `/tmp` (see README › Validation). Accounts e2e: `billions_e2e` db, role `billions_app`.
 - Per-IP limits share one bucket in tests (everything is 127.0.0.1); the e2e server raises them via `BILLIONS_*_PER_IP_*` env vars. Without that, repeat runs within 15 minutes fail at verification.
+
+## Excel investigation — reference eacd9e7a
+
+User reported another hosted upload failure. Vercel log: 23 Oct 07:33:10 UTC, kind reader, Node v24.21.0, 6768 bytes. Generated fictional CRM `/workspace/artifacts/naxium-sales-crm.xlsx` is 9078 bytes; it parses locally both with traced deployment dependencies and on Node v24.21.0. This does not reproduce the user's exact upload or prove hosted parsing works. Root cause remains unresolved; exact failing workbook is needed. Added allowlisted stage/error-name/library-frame diagnostics without messages, XML or cells. Reader tests (3) and typecheck pass. Do not mark XLSX fixed.
