@@ -67,7 +67,9 @@ export async function inputEvidence(sheet:Sheet,plan:Plan):Promise<InputEvidence
 }
 export function describePlan(plan:Plan):string {
   const action={sum:'Total',average:'Average',min:'Minimum',max:'Maximum',count:'Count',rows:'List',distinct:'Count distinct'}[plan.operation];
-  return `${action} ${plan.column??'rows'}${plan.groupBy?` by ${plan.groupBy}${plan.period?` (${plan.period})`:''}`:''}${plan.filters?.length?` · ${plan.filters.map(f=>`${f.column} ${f.operator.replaceAll('_',' ')} ${f.value}`).join(' and ')}`:' · All rows'}`;
+  const filters=plan.filters?.map(f=>`${f.column} ${f.operator.replaceAll('_',' ')} ${plan.dateAnchor==='today' && f.value==='$today'?'today (Australia/Melbourne)':f.value}`).join(' and ');
+  const ordering=plan.operation==='rows'||plan.groupBy ? ` · Up to ${plan.limit??20} results${plan.column||plan.groupBy?`, ${plan.direction==='asc'?'ascending':'descending'}`:''}` : '';
+  return `${action} ${plan.column??'rows'}${plan.groupBy?` by ${plan.groupBy}${plan.period?` (${plan.period})`:''}`:''}${filters?` · ${filters}`:' · All rows'}${ordering}`;
 }
 
 // Narrow, data-local corrections. Ambiguous values fall through to the constrained AI planner.

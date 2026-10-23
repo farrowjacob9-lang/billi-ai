@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {csvSheet,executePlan} from '../src/lib/sheet.ts';
-import {canonicalPlan,inputEvidence,recognizeMethod,simpleCorrection,oneOffIntent,taskKey,validateMethod,type LearnedMethod} from '../src/lib/methods.ts';
+import {canonicalPlan,inputEvidence,recognizeMethod,simpleCorrection,oneOffIntent,describePlan,taskKey,validateMethod,type LearnedMethod} from '../src/lib/methods.ts';
 import {validateSnapshot} from '../src/lib/workspace.ts';
 const sheet=csvSheet('Amount,Status,Category\n100,Posted,Sales\n900,Pending,Sales\n-20,Posted,Travel','first.csv');
 const base={operation:'sum' as const,column:'Amount'};
@@ -48,4 +48,9 @@ test('method history rejects unknown headings, unsafe numeric filters and reorde
  assert.throws(()=>canonicalPlan({...base,filters:[{column:'Amount',operator:'gt',value:NaN}]},sheet));
  assert.throws(()=>validateMethod({...m,revision:2,versions:[{...m.versions[0],version:2},m.versions[0]]}),/history/);
  assert.throws(()=>validateMethod({...m,columns:['Amount','Amount']}));
+});
+
+test('approach summaries disclose result limits, order and relative-date scope',()=>{
+ assert.match(describePlan({operation:'rows',column:'Amount',direction:'asc',limit:1}),/Up to 1 results, ascending/);
+ assert.match(describePlan({operation:'count',dateAnchor:'today',filters:[{column:'Date',operator:'before',value:'$today'}]}),/today \(Australia\/Melbourne\)/);
 });
