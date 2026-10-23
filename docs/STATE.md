@@ -1,4 +1,4 @@
-# Current checkpoint — 22 Oct 2026
+# Current checkpoint — 23 Oct 2026
 
 Branch: `spreadsheet-questions`. Draft PR: https://github.com/farrowjacob9-lang/billi-ai/pull/2 (includes the earlier account foundation). Latest implementation commit: `57b8780`.
 
@@ -21,6 +21,13 @@ Preview: https://billi-ai-git-spreadsheet-questions-naxium-langs-projects.vercel
 CSV and Excel ingestion, validated AI calculation plans executed in code, source/filter evidence, optional saved workspaces, answer review decisions, Excel/PDF exports, light/dark theme, AI token activity and allowance, manual calculation routines and optional Inngest schedules. Saved work has 30-day retention. Source files are not retained; explicitly saved work retains parsed cells/conversation.
 
 Reused suitable Naxium brand assets and email layout from retired `farrowjacob9-lang/naxium-app`; did not move its construction engine or domain bindings.
+
+## Latest feature additions — 23 Oct
+
+- Full spreadsheet preview: 25 rows per page, search across every row, original source row numbers.
+- Data checks: blank cells by column, mixed numeric/non-numeric values, exact repeated rows. Review filters never remove or change source data and do not affect calculations.
+- Suggested questions use actual column headings and fill the composer for review before sending.
+- Validation: production build, typecheck and unit suite passed; all 7 spreadsheet browser scenarios passed, including search beyond the first page, repeat/blank review, unaffected full-sheet counts, saved work and exports. Browser model responses use a fake provider; hosted Excel upload remains unconfirmed.
 
 ## Verification and limits
 

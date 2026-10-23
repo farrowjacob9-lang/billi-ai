@@ -103,3 +103,29 @@ test('Naxium saved work survives refresh, keeps review decisions, and exports Ex
  await expect.poll(async()=>((await page.locator('.sidebar').boundingBox())?.x??0)+224).toBeLessThanOrEqual(1);
  await page.screenshot({path:test.info().outputPath('naxium-workspace-mobile.png'),fullPage:true});
 });
+
+test('explorer searches every row, reviews data and suggests questions without changing calculations', async ({ page }) => {
+ await page.goto('/');
+ const rows = Array.from({length:30}, (_,i) => `Travel,${i+1},note-${i}`);
+ rows.push('Travel,1,note-0', 'Other,unknown,');
+ await page.getByLabel('Upload spreadsheet').setInputFiles({name:'explorer.csv',mimeType:'text/csv',buffer:Buffer.from('Category,Amount,Note\n'+rows.join('\n'))});
+ const preview = page.getByRole('region',{name:'Spreadsheet preview'});
+ await expect(preview.getByRole('cell',{name:'note-29',exact:true})).toHaveCount(0);
+ await preview.getByRole('button',{name:'Next rows'}).click();
+ await expect(preview.getByRole('cell',{name:'note-29',exact:true})).toBeVisible();
+ await preview.getByLabel('Search rows').fill('note-29');
+ await expect(preview.getByRole('status')).toContainText('1 of 32');
+ await expect(preview.getByRole('rowheader',{name:'31',exact:true})).toBeVisible();
+ await preview.getByLabel('Search rows').fill('');
+ await preview.getByText(/Data checks/).click();
+ await expect(preview.getByText(/Mixed numeric and non-numeric/)).toBeVisible();
+ await preview.getByLabel('Review rows').selectOption('duplicates');
+ await expect(preview.getByRole('status')).toContainText('1 of 32');
+ await expect(preview.getByRole('rowheader',{name:'32',exact:true})).toBeVisible();
+ await preview.getByLabel('Review rows').selectOption('blanks');
+ await expect(preview.getByRole('rowheader',{name:'33',exact:true})).toBeVisible();
+ await preview.getByRole('button',{name:'How many rows?',exact:true}).click();
+ await expect(page.getByLabel('Message Naxium')).toHaveValue('How many rows?');
+ await page.getByRole('button',{name:'Send message'}).click();
+ await expect(page.getByRole('region',{name:'Conversation workspace'}).getByText(/All rows: 32/)).toBeVisible();
+});

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowDownToLine, ArrowRight, ArrowUp, ArrowUpRight, FileSpreadsheet, MessageSquare, Paperclip, Play, ShieldCheck, Sparkles, Upload, X, Zap } from "lucide-react";
+import { SheetExplorer } from "@/components/SheetExplorer";
 import { ReportCard } from "@/components/ReportCard";
 import type { Report } from "@/lib/report";
 import type { Message, UiError } from "@/lib/types";
@@ -65,9 +66,7 @@ export function WorkspaceView(props: Props) {
         <div className="sheet-card">
           <label htmlFor="sheet-select">Active sheet</label>
           <select id="sheet-select" value={props.sheetIndex} onChange={e => props.onSelectSheet(Number(e.target.value))}>{props.sheets.map((s, i) => <option value={i} key={i}>{s.name}</option>)}</select>
-          <p>Ask about the selected sheet. All rows are included in calculations; the preview shows the first 10.</p>
-          <div className="sheet-scroll"><table><thead><tr><th>Row</th>{props.sheet.columns.map(c => <th key={c}>{c}</th>)}</tr></thead><tbody>{props.sheet.rows.slice(0, 10).map((row, i) => <tr key={i}><th>{i + 2}</th>{row.map((cell, j) => <td key={j}>{String(cell ?? "")}</td>)}</tr>)}</tbody></table></div>
-          <p>Try “total Amount”, “count rows where Category equals Travel”, or “sum Amount by Category”. State whether expenses are negative if you use a signed amount column. Amounts keep the units in your spreadsheet.</p>
+          <SheetExplorer key={`${props.sheetIndex}:${props.sheet.name}`} sheet={props.sheet} disabled={busy || replying} onQuestion={question => { setDraft(question); document.getElementById("message")?.focus({ preventScroll: true }); }} />
           <p>Save workspace keeps your parsed data and conversation for 30 days. Unsaved work is removed when you refresh or start a new conversation.</p>
           <button className="secondary-button" disabled={busy} onClick={props.onPrepareSheetReport}>Prepare weekly report</button>
           <p>Weekly reporting needs date, description, category and amount columns, AUD amounts, and at most seven consecutive days.</p>

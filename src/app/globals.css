@@ -153,3 +153,11 @@
 .saved-work-shortcuts > strong { margin-right: .35rem; }
 .saved-work-shortcuts button { max-width: 100%; overflow-wrap: anywhere; }
 .saved-work-shortcuts button[aria-current="page"] { border-color: currentColor; font-weight: 600; }
+
+.sheet-suggestions, .sheet-pagination { display: flex; flex-wrap: wrap; gap: .5rem; margin: .8rem 0; }
+.sheet-explorer-controls { display: flex; flex-wrap: wrap; gap: .8rem; margin-top: 1rem; }
+.sheet-explorer-controls label { flex: 1 1 180px; min-width: 0; }
+.sheet-explorer-controls input { display: block; width: 100%; margin-top: .5rem; padding: .7rem; border: 1px solid var(--border, #d8dcda); border-radius: 8px; background: transparent; color: inherit; font: inherit; }
+.sheet-checks { margin-top: 1rem; padding: .8rem; border: 1px solid var(--border, #d8dcda); border-radius: 8px; }
+.sheet-checks summary { cursor: pointer; font-weight: 600; }
+.sheet-checks ul { padding-left: 1.2rem; font-size: .85rem; line-height: 1.7; overflow-wrap: anywhere; }
