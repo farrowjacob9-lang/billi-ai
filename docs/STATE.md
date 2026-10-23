@@ -4,6 +4,10 @@ Branch: `spreadsheet-questions`. Draft PR: https://github.com/farrowjacob9-lang/
 
 Preview: https://billi-ai-git-spreadsheet-questions-naxium-langs-projects.vercel.app/
 
+## Latest product synthesis — read before planning more features
+
+Read [NEXT-UP.md](NEXT-UP.md) for the consolidated user-approved direction, corrections to earlier examples, competitive findings and next-session brief. The target is useful work whose accepted method carries forward to the next matching request without a separate “remember/create workflow” instruction. Learning should emerge through use, not a guided interview or manual workflow builder. Sales/quoting is a possible test domain, not a committed market; spreadsheet creation/editing was illustrative, not an approved implementation request. The research in [NAXIUM-COMPETITIVE-STRATEGY.md](NAXIUM-COMPETITIVE-STRATEGY.md) supplies evidence and hypotheses; later user clarifications in NEXT-UP take precedence over its proposed sales-review focus. This synthesis is documentation only, not new product behavior. Application checkpoint `ae06b12` is deployed and CI passed, including the portable screenshot-path fix.
+
 ## Connected product navigation
 
 Implemented the first product-wide connection layer from `CONNECTED-PRODUCT-EXPERIENCE.md`: shared searchable work/report list; Workflows library; Activity with cloud workflow jobs and Continue in chat; identifier-only saved work/report URLs with reload and Back support. Workflow drafts remain mounted across destinations, and unsent composer drafts/reading position remain in memory through library navigation. Saved work title appears in chat. Chat commands `show my workflows`, `show my activity`, and `run workflow <exact saved name>` call shared navigation/execution actions. Legacy weekly report templates remain accessible in the workflow library and run directly on a newly selected CSV.
