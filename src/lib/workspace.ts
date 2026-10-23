@@ -15,6 +15,7 @@ export type Snapshot = {
   sheets: Sheet[];
   sheetIndex: number;
   messages: WorkspaceMessage[];
+  sheetMessages?: Record<string, WorkspaceMessage[]>;
 };
 export function validateSnapshot(input: unknown): Snapshot {
   if (!input || typeof input !== "object")
@@ -57,7 +58,18 @@ export function validateSnapshot(input: unknown): Snapshot {
       ...(m.decision ? { decision: m.decision } : {}),
     };
   });
-  const result = { sheets, sheetIndex: s.sheetIndex, messages };
+  let sheetMessages: Record<string, WorkspaceMessage[]> | undefined;
+  if (s.sheetMessages !== undefined) {
+    if (!s.sheetMessages || typeof s.sheetMessages !== "object" || Array.isArray(s.sheetMessages) || Object.keys(s.sheetMessages).length > sheets.length) throw new Error("Invalid sheet conversations.");
+    sheetMessages = {};
+    for (const [key, turns] of Object.entries(s.sheetMessages)) {
+      const index = Number(key);
+      if (!Number.isInteger(index) || index < 0 || index >= sheets.length) throw new Error("Invalid sheet conversation index.");
+      // Recursion validates only the selected turns, never nests history objects.
+      sheetMessages[key] = validateSnapshot({sheets:[sheets[index]],sheetIndex:0,messages:turns}).messages;
+    }
+  }
+  const result = { sheets, sheetIndex: s.sheetIndex, messages, ...(sheetMessages ? {sheetMessages} : {}) };
   if (new TextEncoder().encode(JSON.stringify(result)).length > 2 * 1024 * 1024)
     throw new Error(
       "The saved workspace must be under 2 MB. Start a new conversation or use a smaller sheet.",

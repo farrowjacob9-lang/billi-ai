@@ -1,4 +1,5 @@
 "use client";
+import { WorkflowBuilder } from "@/components/WorkflowBuilder";
 import { useEffect, useRef, useState } from "react";
 import { api, type Capabilities } from "@/lib/store";
 import {
@@ -6,6 +7,7 @@ import {
   type Snapshot,
   type Decision,
 } from "@/lib/workspace";
+import type { Sheet } from "@/lib/sheet";
 import type { Message } from "@/lib/types";
 
 type Saved = {
@@ -13,6 +15,7 @@ type Saved = {
   name: string;
   expires_at: string;
   snapshot?: Snapshot;
+  revision?: string;
 };
 type Routine = {
   id: string;
@@ -64,6 +67,8 @@ export function WorkspaceTools({
   onRestore,
   onReview,
   onNotice,
+  onDirty,
+  onResults,
 }: {
   caps: Capabilities;
   snapshot: Snapshot | null;
@@ -71,13 +76,30 @@ export function WorkspaceTools({
   onRestore: (s: Snapshot) => void;
   onReview: (id: number, d: Decision) => void;
   onNotice: (s: string) => void;
+  onDirty: (dirty: boolean) => void;
+  onResults: (messages: Message[], source: Sheet) => void;
 }) {
-  const toolsRef = useRef<HTMLDetailsElement>(null);
+  const sessionVersion = useRef(sessionKey);
+  sessionVersion.current = sessionKey;
   const [saved, setSaved] = useState<Saved[]>([]),
     [active, setActive] = useState(""),
     [name, setName] = useState(""),
     [working, setWorking] = useState(false),
     [theme, setTheme] = useState("light");
+  const [savedName,setSavedName] = useState("");
+  const [baseline, setBaseline] = useState("");
+  const [revision, setRevision] = useState<string | undefined>();
+  const [autosave, setAutosave] = useState(false);
+  const fingerprint = snapshot ? JSON.stringify(snapshot) : "";
+  const dirty = !!snapshot && (fingerprint !== baseline || !!active && name.trim() !== savedName);
+  useEffect(() => { onDirty(dirty); }, [dirty, onDirty]);
+  useEffect(() => {
+    if (!dirty) return;
+    const leave = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", leave);
+    return () => window.removeEventListener("beforeunload", leave);
+  }, [dirty]);
+  const toolsRef = useRef<HTMLDetailsElement>(null);
   const [usage, setUsage] = useState<{
     used: number;
     limit: number;
@@ -94,10 +116,12 @@ export function WorkspaceTools({
   const [routines, setRoutines] = useState<Routine[]>([]),
     [jobs, setJobs] = useState<Job[]>([]),
     [cadence, setCadence] = useState("manual");
+  const [readiness, setReadiness] = useState<Record<string, boolean> | null>(null);
   const cloud = caps.mode === "cloud";
   useEffect(() => {
     setActive("");
     setName("");
+    setBaseline(""); setRevision(undefined); setAutosave(false);
   }, [sessionKey]);
   async function load() {
     if (cloud) {
@@ -142,8 +166,9 @@ export function WorkspaceTools({
       setWorking(false);
     }
   }
-  async function save() {
+  async function save(copy = false, silent = false) {
     if (!snapshot) return;
+    const savingSession = sessionVersion.current;
     const valid = validateSnapshot(snapshot);
     const title = name.trim() || snapshot.sheets[snapshot.sheetIndex].name;
     const data = cloud
@@ -151,38 +176,52 @@ export function WorkspaceTools({
           await api<{ workspace: Saved }>("/api/workspaces", {
             method: "POST",
             body: JSON.stringify({
-              id: active || undefined,
+              id: copy ? undefined : active || undefined,
+              revision,
               name: title,
               snapshot: valid,
             }),
           })
         ).workspace
       : {
-          id: active || crypto.randomUUID(),
+          id: !copy && active || crypto.randomUUID(),
+          revision: crypto.randomUUID(),
           name: title,
           expires_at: new Date(Date.now() + 30 * 86400000).toISOString(),
           snapshot: valid,
         };
     if (!cloud) {
-      if (!active && saved.length >= 10)
+      if ((!active || copy) && saved.length >= 10)
         throw new Error(
           "Delete a saved workspace first (maximum 10 in this browser).",
         );
       await localDB("readwrite", (s) => s.put(data));
     }
+    if (savingSession !== sessionVersion.current) { await load(); return; }
     setActive(data.id);
     setName(title);
+    setBaseline(fingerprint); setRevision(data.revision); setSavedName(title);
     await load();
-    onNotice(
+    if (!silent) onNotice(
       "Workspace saved for 30 days. Save again to include new questions and extend retention.",
     );
   }
+  useEffect(() => {
+    if (!autosave || !active || !dirty || working) return;
+    const timer = setTimeout(() => void perform(async () => { try { await save(false, true); } catch(e) { setAutosave(false); throw e; } }), 2000);
+    return () => clearTimeout(timer);
+  }, [autosave, active, dirty, working, fingerprint, name]); // eslint-disable-line react-hooks/exhaustive-deps
   async function open(id: string) {
+    if (dirty && !window.confirm("You have unsaved changes. Open another workspace and discard them?")) return;
+    const openingSession = sessionVersion.current;
     const data = cloud
       ? (await api<{ workspace: Saved }>("/api/workspaces/" + id)).workspace
       : await localDB<Saved>("readonly", (s) => s.get(id));
+    if (openingSession !== sessionVersion.current) return;
     if (!data?.snapshot) throw new Error("Workspace no longer available.");
-    onRestore(validateSnapshot(data.snapshot));
+    const restored = validateSnapshot(data.snapshot);
+    setBaseline(JSON.stringify(restored)); setRevision(data.revision); setSavedName(data.name); setAutosave(false);
+    onRestore(restored);
     setActive(id);
     setName(data.name);
     if (toolsRef.current) toolsRef.current.open = false;
@@ -248,10 +287,13 @@ export function WorkspaceTools({
       {saved.map(w => <button key={w.id} className="secondary-button" disabled={working} aria-current={active === w.id ? "page" : undefined} onClick={() => void perform(() => open(w.id))}>{w.name}</button>)}
       {working && <span role="status">Loading…</span>}
     </nav>}
+    <WorkflowBuilder snapshot={snapshot} workspaceId={active} cloud={cloud} onResults={onResults} onNotice={onNotice} />
     <details ref={toolsRef} className="workspace-tools">
       <summary>Saved work, exports & routines</summary>
+      <p role="status">{working ? "Working…" : dirty ? "Unsaved changes" : active ? "All changes saved" : "No workspace open"}{active && name ? ` · ${name}` : ""}</p>
       <div className="tools-row">
         <strong>Your workspace</strong>
+        <a href="/plans">Plan and limits</a>
         <button className="secondary-button" onClick={toggleTheme}>
           {theme === "light" ? "Dark theme" : "Light theme"}
         </button>
@@ -286,7 +328,7 @@ export function WorkspaceTools({
         <button
           className="primary-button"
           disabled={!snapshot || working}
-          onClick={() => void perform(save)}
+          onClick={() => void perform(() => save())}
         >
           Save workspace
         </button>
@@ -300,6 +342,7 @@ export function WorkspaceTools({
           </button>
         )}
       </div>
+      {active && <div className="tools-row"><label><input type="checkbox" checked={autosave} onChange={e => setAutosave(e.target.checked)} /> Autosave changes to this saved workspace (extends 30-day retention)</label><button className="secondary-button" disabled={working || !snapshot} onClick={() => void perform(() => save(true))}>Save a version copy</button></div>}
       <p>
         Saving keeps the parsed cells and conversation for 30 days{" "}
         {cloud ? "in your business" : "in this browser"}. Uploads are temporary
@@ -333,6 +376,7 @@ export function WorkspaceTools({
           </button>
         </div>
       )}
+      {cloud && <details onToggle={e => { if (e.currentTarget.open) void api<Record<string, boolean>>("/api/readiness").then(setReadiness).catch(e => onNotice(e.message)); }}><summary>Service connections</summary>{readiness && Object.entries(readiness).map(([key, ready]) => <p key={key}>{({storage:"Saved work",ai:"AI provider",accountEmail:"Account emails",scheduledWorkflows:"Scheduled workflows",billing:"Paid subscriptions"} as Record<string,string>)[key] ?? key}: {ready ? "Configured" : "Not connected"}</p>)}<p>Configuration status does not prove delivery or availability. Scheduled workflows run against saved data, not live bank feeds.</p></details>}
       <details>
         <summary>Review answers</summary>
         {snapshot?.messages

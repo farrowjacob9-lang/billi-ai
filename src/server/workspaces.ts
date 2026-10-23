@@ -40,14 +40,14 @@ export async function listWorkspaces(businessId: string) {
 export async function getWorkspace(
   businessId: string,
   id: string,
-): Promise<{ id: string; name: string; snapshot: Snapshot } | null> {
+): Promise<{ id: string; name: string; snapshot: Snapshot; revision: string } | null> {
   if (!validId(id)) return null;
   return withTenant(
     businessId,
     async (c) =>
       (
         await c.query(
-          "SELECT id,name,snapshot FROM workspaces WHERE business_id=$1 AND id=$2 AND expires_at>now()",
+          "SELECT id,name,snapshot,md5(snapshot::text || updated_at::text) AS revision FROM workspaces WHERE business_id=$1 AND id=$2 AND expires_at>now()",
           [businessId, id],
         )
       ).rows[0] ?? null,
@@ -59,6 +59,7 @@ export async function saveWorkspace(
   name: string,
   input: unknown,
   id?: string,
+  revision?: string,
 ) {
   const snapshot = validateSnapshot(input);
   return withTenant(businessId, async (c) => {
@@ -71,11 +72,11 @@ export async function saveWorkspace(
         throw new HttpError(400, "invalid_input", "Invalid workspace.");
       saved = (
         await c.query(
-          "UPDATE workspaces SET name=$3,snapshot=$4,updated_at=now(),expires_at=now()+interval '30 days' WHERE business_id=$1 AND id=$2 AND expires_at>now() RETURNING id,name,updated_at,expires_at",
-          [businessId, id, name, JSON.stringify(snapshot)],
+          "UPDATE workspaces SET name=$3,snapshot=$4,updated_at=now(),expires_at=now()+interval '30 days' WHERE business_id=$1 AND id=$2 AND expires_at>now() AND md5(snapshot::text || updated_at::text)=$5 RETURNING id,name,updated_at,expires_at,md5(snapshot::text || updated_at::text) AS revision",
+          [businessId, id, name, JSON.stringify(snapshot), revision ?? ""],
         )
       ).rows[0];
-      if (!saved) throw new HttpError(404, "not_found", "Workspace not found.");
+      if (!saved) throw new HttpError(409, "workspace_conflict", "This workspace changed in another tab, expired or was deleted. Save a copy to preserve your work, then reopen the latest version.");
     } else {
       const count = await c.query(
         "SELECT count(*)::int AS n FROM workspaces WHERE business_id=$1 AND expires_at>now()",
@@ -89,7 +90,7 @@ export async function saveWorkspace(
         );
       saved = (
         await c.query(
-          "INSERT INTO workspaces(business_id,created_by,name,snapshot) VALUES($1,$2,$3,$4) RETURNING id,name,updated_at,expires_at",
+          "INSERT INTO workspaces(business_id,created_by,name,snapshot) VALUES($1,$2,$3,$4) RETURNING id,name,updated_at,expires_at,md5(snapshot::text || updated_at::text) AS revision",
           [businessId, userId, name, JSON.stringify(snapshot)],
         )
       ).rows[0];

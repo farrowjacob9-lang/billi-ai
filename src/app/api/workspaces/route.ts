@@ -39,6 +39,7 @@ export const POST = route(async (req) => {
         name,
         snapshot,
         typeof b.id === "string" ? b.id : undefined,
+        typeof b.revision === "string" ? b.revision : undefined,
       ),
     },
     201,

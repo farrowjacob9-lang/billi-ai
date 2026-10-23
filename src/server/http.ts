@@ -18,15 +18,24 @@ const AUTH_STATUS: Record<AuthError["code"], number> = { signed_out: 401, invali
 // Wraps a route so every failure leaves in the same { error: { code, message } } envelope.
 export function route<A extends unknown[]>(handler: (request: Request, ...rest: A) => Promise<Response>) {
   return async (request: Request, ...rest: A) => {
+    const reference = crypto.randomUUID();
+    const started = Date.now();
+    let response: Response;
     try {
       if (request.method !== "GET" && request.method !== "HEAD") assertSameOrigin(request);
-      return await handler(request, ...rest);
+      response = await handler(request, ...rest);
     } catch (e) {
-      if (e instanceof HttpError) return fail(e.status, e.code, e.message);
-      if (e instanceof AuthError) return fail(AUTH_STATUS[e.code], e.code, e.message);
-      console.error("[api] unhandled error", e);
-      return fail(500, "internal", "Something went wrong on our side. Please try again.");
+      if (e instanceof HttpError) response = fail(e.status, e.code, e.message);
+      else if (e instanceof AuthError) response = fail(AUTH_STATUS[e.code], e.code, e.message);
+      else {
+        // Never log request bodies, query strings, customer cells or raw provider errors.
+        console.error("[api] failed", {reference, path:new URL(request.url).pathname, kind:e instanceof Error ? e.name : "unknown"});
+        response = fail(500, "internal", `Something went wrong on our side. Reference: ${reference}. Please try again.`);
+      }
     }
+    response.headers.set("x-request-id",reference);
+    response.headers.set("server-timing",`app;dur=${Date.now()-started}`);
+    return response;
   };
 }
 

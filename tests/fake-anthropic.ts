@@ -11,6 +11,8 @@ function reply(body: Body): string {
   const last = String(body.messages?.at(-1)?.content ?? "");
   if (body.system?.includes("Translate a spreadsheet question")) {
     const request = JSON.parse(last);
+    if (/how much did we spend/i.test(request.question)) return JSON.stringify({clarification:"Which amount column and sign convention should I use, and should pending transactions be included?"});
+    if (/monthly/i.test(request.question)) return JSON.stringify({operation:"sum",column:"Amount",groupBy:"Date",period:"month"});
     if (/invent/i.test(request.question)) return JSON.stringify({ operation: "sum", column: "Imaginary" });
     if (/largest/i.test(request.question)) return JSON.stringify({ operation: "rows", column: "Amount", direction: "asc", limit: 1 });
     return JSON.stringify({ operation: "sum", column: "Amount", groupBy: "Category" });

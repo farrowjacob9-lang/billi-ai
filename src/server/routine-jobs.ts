@@ -1,5 +1,5 @@
+import { runWorkflow } from "../lib/workflow.ts";
 import { withTenant, query } from "./db.ts";
-import { executePlan, validatePlan, type Plan } from "../lib/sheet.ts";
 import type { Snapshot } from "../lib/workspace.ts";
 export async function createJob(
   businessId: string,
@@ -53,7 +53,7 @@ export async function runJob(businessId: string, id: string) {
       throw new Error(
         "This routine needs a worksheet that is no longer present.",
       );
-    result = executePlan(sheet, validatePlan(job.plan, sheet) as Plan);
+    result = runWorkflow(job.plan, sheet).map((step,i) => `Step ${i+1}: ${step.name}\n${step.text}`).join("\n\n");
   } catch (e) {
     status = "needs_input";
     error =

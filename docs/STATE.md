@@ -1,6 +1,6 @@
 # Current checkpoint — 23 Oct 2026
 
-Branch: `spreadsheet-questions`. Draft PR: https://github.com/farrowjacob9-lang/billi-ai/pull/2 (includes the earlier account foundation). Latest implementation commit: `57b8780`.
+Branch: `spreadsheet-questions`. Draft PR: https://github.com/farrowjacob9-lang/billi-ai/pull/2 (includes the earlier account foundation). Implementation history is on this branch; see the workflow-first checkpoint below for the latest scope.
 
 Preview: https://billi-ai-git-spreadsheet-questions-naxium-langs-projects.vercel.app/
 
@@ -28,6 +28,16 @@ Reused suitable Naxium brand assets and email layout from retired `farrowjacob9-
 - Data checks: blank cells by column, mixed numeric/non-numeric values, exact repeated rows. Review filters never remove or change source data and do not affect calculations.
 - Suggested questions use actual column headings and fill the composer for review before sending.
 - Validation: production build, typecheck and unit suite passed; all 7 spreadsheet browser scenarios passed, including search beyond the first page, repeat/blank review, unaffected full-sheet counts, saved work and exports. Browser model responses use a fake provider; hosted Excel upload remains unconfirmed.
+
+## Workflow-first implementation — 23 Oct
+
+User clarified that learning and building workflows is the biggest product feature. New builder remembers explicitly approved calculation steps (up to 12), names/reorders them, checks required columns and reruns them against a fresh sheet. Cloud storage uses existing tenant-isolated routines and audits applications; local mode stores rules in this browser. See `docs/WORKFLOWS.md` for usage and limits.
+
+Also added structured answers/source inspection, model clarification responses, ISO-date filters/month/year grouping/distinct counts, header selection, opt-in autosave, unsaved-work warnings, per-sheet histories, cloud save revision checks and separate version copies. Operations: health/configuration endpoints, request references/timing, sanitised errors and Postgres CI service. Commercial work is limited to a factual private-beta plan/limits page; no payments or subscriptions enabled.
+
+Validation: production build passed; all 10 spreadsheet browser scenarios passed and all 6 report browser scenarios passed after adapting them to deliberately accept unsaved-work prompts; 4 model browser scenarios passed in the full run. Unit tests: 29 passed, 19 external-Postgres tests skipped locally. Offline calculations: 25/25. Browser AI uses a fake provider. New cloud workflow application and conflict handling still need hosted account verification; CI now supplies Postgres for the existing database suite. Hosted Excel remains unconfirmed.
+
+Important: remembered cloud workflows currently expire/delete with their source workspace. Durable independent workflow memory, parameters/mapping, conditional steps, full version history, teams, connectors and billing remain future work. No migration beyond already-applied 005 is required for this slice. Domain, Resend and worker setup remain pending.
 
 ## Verification and limits
 

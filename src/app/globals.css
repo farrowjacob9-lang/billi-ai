@@ -161,3 +161,30 @@
 .sheet-checks { margin-top: 1rem; padding: .8rem; border: 1px solid var(--border, #d8dcda); border-radius: 8px; }
 .sheet-checks summary { cursor: pointer; font-weight: 600; }
 .sheet-checks ul { padding-left: 1.2rem; font-size: .85rem; line-height: 1.7; overflow-wrap: anywhere; }
+
+.sheet-answer { min-width: 0; }
+.sheet-answer > strong { display: block; text-transform: capitalize; margin-bottom: .6rem; }
+.sheet-answer details { margin: .8rem 0; font-size: .85rem; }
+.sheet-answer details p { margin: .5rem 0; }
+.answer-text { white-space: pre-wrap; }
+.answer-chart { margin: 1rem 0; padding: .7rem; border: 1px solid #aaa6; border-radius: 8px; }
+.answer-chart figcaption { font-size: .8rem; margin-bottom: .6rem; }
+.answer-chart > div { display: grid; grid-template-columns: minmax(55px,1fr) minmax(45px,1fr) auto; gap: .4rem; align-items: center; font-size: .8rem; }
+.answer-chart meter { width: 100%; }
+
+.workflow-panel { padding: 1.2rem; margin: 0 0 1rem; border: 1px solid #aaa6; border-radius: 12px; background: var(--surface, transparent); }
+.workflow-panel h2 { font-size: 1.15rem; margin: 0 0 .5rem; }
+.workflow-panel p { font-size: .85rem; line-height: 1.6; margin: .7rem 0; }
+.workflow-panel label { display: block; margin: .7rem 0; font-size: .85rem; }
+.workflow-panel input, .workflow-panel select { display: block; width: 100%; padding: .6rem; margin-top: .4rem; border: 1px solid #aaa7; border-radius: 8px; background: transparent; color: inherit; font: inherit; }
+.workflow-panel details { margin: .8rem 0; }
+.workflow-panel summary { cursor: pointer; font-weight: 600; }
+.workflow-panel pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 300px; overflow: auto; font-size: .8rem; }
+.workflow-step { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: .5rem 0; }
+.workflow-panel button { margin: .25rem; }
+
+.plans-page { max-width: 760px; margin: 3rem auto; padding: 1.5rem; line-height: 1.7; }
+.plans-page h1 { font-size: 2rem; margin: 1rem 0; }
+.plans-page section { border: 1px solid #aaa6; padding: 1.2rem; border-radius: 12px; margin: 1rem 0; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }

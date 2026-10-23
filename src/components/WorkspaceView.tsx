@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowDownToLine, ArrowRight, ArrowUp, ArrowUpRight, FileSpreadsheet, MessageSquare, Paperclip, Play, ShieldCheck, Sparkles, Upload, X, Zap } from "lucide-react";
+import { SheetAnswer } from "@/components/SheetAnswer";
 import { SheetExplorer } from "@/components/SheetExplorer";
 import { ReportCard } from "@/components/ReportCard";
 import type { Report } from "@/lib/report";
@@ -21,6 +22,7 @@ const STAGES = [
 ];
 
 type Props = {
+  headerRow: number; onHeaderRow: (row: number) => void;
   sheet: Sheet | null; sheets: Sheet[]; sheetIndex: number; onSelectSheet: (index: number) => void;
   onPrepareSheetReport: () => void;
   report: Report | null; messages: Message[]; busy: boolean; replying: boolean; stage: number; error: UiError | null; privacyNote: string; modeLabel: string;
@@ -30,6 +32,8 @@ type Props = {
 
 export function WorkspaceView(props: Props) {
   const { report, messages, busy, replying, stage, error, privacyNote, modeLabel } = props;
+  const [sourceRows, setSourceRows] = useState<number[] | null>(null);
+  useEffect(() => setSourceRows(null), [props.sheet]);
   const [draft, setDraft] = useState("");
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
@@ -50,7 +54,7 @@ export function WorkspaceView(props: Props) {
         <div className={`conversation-card ${dragging ? "dragging" : ""}`} onDragEnter={e => { e.preventDefault(); dragDepth.current++; setDragging(true); }} onDragOver={e => e.preventDefault()} onDragLeave={e => { e.preventDefault(); if (--dragDepth.current <= 0) setDragging(false); }} onDrop={e => { e.preventDefault(); dragDepth.current = 0; setDragging(false); const file = e.dataTransfer.files[0]; if (file) props.onUpload(file); }}>
           {dragging && <div className="drop-overlay"><Upload size={32} /><strong>Drop your Excel or CSV here</strong><span>Excel is checked on our server without being saved. Up to 2 MB; headings in the first row.</span></div>}
           <div className="conversation-body">
-            {messages.length === 0 ? <><div className="assistant-avatar"><Sparkles size={22} strokeWidth={1.6} /></div><h3>What would you like to understand?</h3><p>Upload Excel or CSV to get started. Answers show the calculations and rows they use.</p><div className="starter-actions"><button disabled={busy} onClick={props.onPickFile}><FileSpreadsheet size={16} /> Upload a spreadsheet <ArrowUpRight size={14} /></button><button disabled={busy} onClick={props.onRunSample}><Play size={16} /> Try a sample report <ArrowUpRight size={14} /></button><button onClick={() => setDraft("What format should my spreadsheet use?")}><MessageSquare size={16} /> Help me get started <ArrowUpRight size={14} /></button></div></> : <div className="message-list" aria-live="polite">{messages.map(message => <div className={`message ${message.role}`} key={message.id}>{message.role === "assistant" && <span className="message-avatar"><Sparkles size={15} /></span>}<div>{message.text}</div></div>)}{replying && <div className="message assistant"><span className="message-avatar"><Sparkles size={15} /></span><div className="typing" aria-label="Naxium is replying"><i /><i /><i /></div></div>}<div ref={messageEnd} /></div>}
+            {messages.length === 0 ? <><div className="assistant-avatar"><Sparkles size={22} strokeWidth={1.6} /></div><h3>What would you like to understand?</h3><p>Upload Excel or CSV to get started. Answers show the calculations and rows they use.</p><div className="starter-actions"><button disabled={busy} onClick={props.onPickFile}><FileSpreadsheet size={16} /> Upload a spreadsheet <ArrowUpRight size={14} /></button><button disabled={busy} onClick={props.onRunSample}><Play size={16} /> Try a sample report <ArrowUpRight size={14} /></button><button onClick={() => setDraft("What format should my spreadsheet use?")}><MessageSquare size={16} /> Help me get started <ArrowUpRight size={14} /></button></div></> : <div className="message-list" aria-live="polite">{messages.map(message => <div className={`message ${message.role}`} key={message.id}>{message.role === "assistant" && <span className="message-avatar"><Sparkles size={15} /></span>}<div>{message.plan && props.sheet ? <SheetAnswer sheet={props.sheet} plan={message.plan} text={message.text} onSources={rows => { setSourceRows(rows); document.getElementById("sheet-select")?.scrollIntoView({block:"nearest"}); }} /> : message.text}</div></div>)}{replying && <div className="message assistant"><span className="message-avatar"><Sparkles size={15} /></span><div className="typing" aria-label="Naxium is replying"><i /><i /><i /></div></div>}<div ref={messageEnd} /></div>}
             {busy && <div className="progress-card" role="status"><span className="spinner" /><div><strong>{STAGES[stage][0]}</strong><small>{STAGES[stage][1]}</small></div><button className="icon-button" aria-label="Cancel report" onClick={props.onCancel}><X size={16} /></button></div>}
             {error && <div className="error-card" role="alert"><div><strong>{ERROR_TITLES[error.kind]}</strong><p>{error.message}</p></div><button className="icon-button" aria-label="Dismiss error" onClick={props.onDismissError}><X size={16} /></button></div>}
           </div>
@@ -58,6 +62,7 @@ export function WorkspaceView(props: Props) {
         </div>
         <div className="local-note"><ShieldCheck size={13} /> {privacyNote}</div>
 
+        <details className="sheet-checks"><summary>Import settings</summary><label>Column headings are on row <input aria-label="Header row" type="number" min={1} max={100} value={props.headerRow} onChange={e => props.onHeaderRow(Number(e.target.value))} /></label><p>Choose before uploading. Rows above the headings are skipped; all rows below are included. Dates for comparisons must be YYYY-MM-DD. Formulas must be exported as values or CSV.</p><button className="secondary-button" disabled={busy} onClick={props.onPickFile}>Choose file with these settings</button></details>
         <button className="template-link" onClick={props.onDownloadSample}><ArrowDownToLine size={14} /> Download the sample CSV <span>See the supported format</span></button>
       </section>
 
@@ -66,7 +71,7 @@ export function WorkspaceView(props: Props) {
         <div className="sheet-card">
           <label htmlFor="sheet-select">Active sheet</label>
           <select id="sheet-select" value={props.sheetIndex} onChange={e => props.onSelectSheet(Number(e.target.value))}>{props.sheets.map((s, i) => <option value={i} key={i}>{s.name}</option>)}</select>
-          <SheetExplorer key={`${props.sheetIndex}:${props.sheet.name}`} sheet={props.sheet} disabled={busy || replying} onQuestion={question => { setDraft(question); document.getElementById("message")?.focus({ preventScroll: true }); }} />
+          <SheetExplorer key={`${props.sheetIndex}:${props.sheet.name}`} sheet={props.sheet} sourceRows={sourceRows} onClearSources={() => setSourceRows(null)} disabled={busy || replying} onQuestion={question => { setDraft(question); document.getElementById("message")?.focus({ preventScroll: true }); }} />
           <p>Save workspace keeps your parsed data and conversation for 30 days. Unsaved work is removed when you refresh or start a new conversation.</p>
           <button className="secondary-button" disabled={busy} onClick={props.onPrepareSheetReport}>Prepare weekly report</button>
           <p>Weekly reporting needs date, description, category and amount columns, AUD amounts, and at most seven consecutive days.</p>

@@ -6,6 +6,8 @@ import {
   getWorkspace,
   validId,
 } from "@/server/workspaces";
+import { validateWorkflow, runWorkflow } from "@/lib/workflow";
+import { validateSheet } from "@/lib/sheet";
 import { validatePlan } from "@/lib/sheet";
 import { createJob, failJob } from "@/server/routine-jobs";
 import { workflows, workflowsConfigured } from "@/server/workflows/client";
@@ -16,7 +18,7 @@ export const GET = route(async () => {
     ok({
       routines: (
         await c.query(
-          "SELECT id,name,cadence,workspace_id,sheet_index,question FROM workspace_routines WHERE business_id=$1 ORDER BY created_at DESC LIMIT 30",
+          "SELECT id,name,cadence,workspace_id,sheet_index,question,plan FROM workspace_routines WHERE business_id=$1 ORDER BY created_at DESC LIMIT 30",
           [s.businessId],
         )
       ).rows,
@@ -32,8 +34,8 @@ export const GET = route(async () => {
 export const POST = route(async (req) => {
   const s = await requireSession();
   await requireWorkspaceStorage();
-  const b = await readJson(req, 12000);
-  if (["create","run"].includes(String(b.action)) && !await takeRateLimit(`workspace-routine:${s.businessId}`,60,3600)) throw new HttpError(429,"rate_limited","Too many routine changes. Try again later.");
+  const b = await readJson(req, 2.5 * 1024 * 1024);
+  if (["create","run","apply"].includes(String(b.action)) && !await takeRateLimit(`workspace-routine:${s.businessId}`,60,3600)) throw new HttpError(429,"rate_limited","Too many routine changes. Try again later.");
   if (b.action === "create") {
     if (
       !validId(b.workspaceId) ||
@@ -67,7 +69,7 @@ export const POST = route(async (req) => {
       );
     let plan;
     try {
-      plan = validatePlan(b.plan, sheet);
+      plan = b.plan && typeof b.plan === "object" && "version" in b.plan ? validateWorkflow(b.plan, sheet) : validatePlan(b.plan, sheet);
     } catch (e) {
       throw new HttpError(422, "invalid_plan", (e as Error).message);
     }
@@ -111,6 +113,18 @@ export const POST = route(async (req) => {
   }
   if (!validId(b.id))
     throw new HttpError(400, "invalid_input", "Choose a routine or job.");
+  if (b.action === "apply") {
+    return withTenant(s.businessId, async c => {
+      const stored = (await c.query("SELECT plan,name FROM workspace_routines WHERE business_id=$1 AND id=$2", [s.businessId,b.id])).rows[0];
+      if (!stored) throw new HttpError(404,"not_found","Workflow not found.");
+      try {
+        const sheet = validateSheet(b.sheet);
+        const results = runWorkflow(stored.plan,sheet);
+        await c.query("INSERT INTO audit_events(business_id,user_id,action,subject_id) VALUES($1,$2,'workflow.applied',$3)",[s.businessId,s.userId,b.id]);
+        return ok({results, name:stored.name});
+      } catch(e) { if (e instanceof HttpError) throw e; throw new HttpError(422,"workflow_input",e instanceof Error ? e.message : "Review the workflow input."); }
+    });
+  }
   if (b.action === "delete")
     return withTenant(s.businessId, async (c) =>
       ok({

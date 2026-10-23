@@ -1,0 +1,67 @@
+"use client";
+import { useEffect, useState } from "react";
+import { api } from "@/lib/store";
+import type { Sheet } from "@/lib/sheet";
+import type { Snapshot, WorkspaceMessage } from "@/lib/workspace";
+import { requiredWorkflowColumns, runWorkflow, type WorkflowDefinition, type WorkflowStep } from "@/lib/workflow";
+
+type SavedWorkflow = { id: string; name: string; question: string; plan: unknown; cadence: string };
+export function WorkflowBuilder({snapshot,workspaceId,cloud,onResults,onNotice}: {snapshot:Snapshot|null;workspaceId:string;cloud:boolean;onResults:(messages:WorkspaceMessage[], source:Sheet)=>void;onNotice:(message:string)=>void}) {
+  const [steps,setSteps] = useState<WorkflowStep[]>([]);
+  const [name,setName] = useState("");
+  const [library,setLibrary] = useState<SavedWorkflow[]>([]);
+  const [busy,setBusy] = useState(false);
+  const [selected,setSelected] = useState("");
+  const [result,setResult] = useState("");
+  const sheet = snapshot?.sheets[snapshot.sheetIndex];
+  async function refresh() {
+    if (cloud) setLibrary((await api<{routines:SavedWorkflow[]}>("/api/workspace-routines")).routines);
+    else { try { setLibrary(JSON.parse(localStorage.getItem("nx-workflows") || "[]")); } catch { setLibrary([]); } }
+  }
+  useEffect(()=> { void refresh().catch(()=>{}); },[cloud]); // eslint-disable-line react-hooks/exhaustive-deps
+  const current = library.find(w=>w.id===selected);
+  const missing = current && sheet ? requiredWorkflowColumns(current.plan).filter(c=>!sheet.columns.includes(c)) : [];
+  async function perform(fn:()=>Promise<void>) { setBusy(true); try { await fn(); } catch(e) {onNotice(e instanceof Error ? e.message : "Workflow failed.");} finally {setBusy(false);} }
+  const candidates = snapshot?.messages.filter(m=>m.role==="assistant" && m.plan && m.decision?.action !== "excluded") ?? [];
+  return <section className="workflow-panel" aria-label="Workflow builder">
+    <h2>Learn a workflow</h2>
+    <p>Keep the steps you approve, then repeat them on a new spreadsheet. Nothing learns silently or sends emails.</p>
+    <details><summary>Build from successful answers · {steps.length} steps</summary>
+      <label>Workflow name<input value={name} maxLength={120} onChange={e=>setName(e.target.value)} placeholder="Monthly expense review" /></label>
+      {!candidates.length && <p>Ask a calculation question first. Successful answers become steps you can choose to remember.</p>}
+      {candidates.map((m,i)=><div className="workflow-step" key={m.id}><span>{m.plan!.operation} {m.plan!.column ?? "rows"}{m.plan!.groupBy ? ` by ${m.plan!.groupBy}` : ""}</span><button className="secondary-button" disabled={steps.length>=12} onClick={()=> {
+        const index = snapshot!.messages.findIndex(x=>x.id===m.id);
+        const question = snapshot!.messages.slice(0,index).filter(x=>x.role==="user").at(-1)?.text ?? "Saved calculation";
+        setSteps(previous=>[...previous,{name:`Step ${previous.length+1}: ${question}`.slice(0,120),question,plan:m.plan!}]);
+      }}>Add answer {i+1} as step</button></div>)}
+      <ol>{steps.map((step,i)=><li key={i}><label>Step {i+1} name<input value={step.name} maxLength={120} onChange={e=>setSteps(old=>old.map((s,j)=>j===i?{...s,name:e.target.value}:s))}/></label><p>{step.question}</p><button className="secondary-button" disabled={i===0} onClick={()=>setSteps(old=>{const next=[...old];[next[i-1],next[i]]=[next[i],next[i-1]];return next;})}>Move earlier</button><button className="secondary-button" onClick={()=>setSteps(old=>old.filter((_,j)=>j!==i))}>Remove step</button></li>)}</ol>
+      <button className="primary-button" disabled={busy || !sheet || !name.trim() || !steps.length || cloud && !workspaceId} onClick={()=>void perform(async()=> {
+        const plan:WorkflowDefinition={version:1,steps};
+        runWorkflow(plan,sheet!);
+        if (cloud) await api("/api/workspace-routines",{method:"POST",body:JSON.stringify({action:"create",workspaceId,sheetIndex:snapshot!.sheetIndex,name,question:steps.map(s=>s.question).join("; ").slice(0,2000),plan,cadence:"manual"})});
+        else {if(library.length>=30) throw new Error("Delete a workflow before saving another (maximum 30)."); const next=[...library,{id:crypto.randomUUID(),name,question:"Approved workflow",plan,cadence:"manual"}];localStorage.setItem("nx-workflows",JSON.stringify(next));}
+        await refresh();setSteps([]);onNotice("Workflow remembered. You can inspect, reuse or delete its steps.");
+      })}>Approve and remember workflow</button>
+      <p>{cloud ? "Save the source workspace first. Workflows are linked to it and are removed when it expires or is deleted." : "Workflows are stored in this browser, including chosen questions and rules. Clearing browser storage removes them."}</p>
+    </details>
+    <label>Saved workflow<select aria-label="Saved workflow" value={selected} onChange={e=>{setSelected(e.target.value);setResult("");}}><option value="">Choose a workflow</option>{library.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}</select></label>
+    {current && <>
+      <details><summary>Inspect remembered rules</summary><pre>{JSON.stringify(current.plan,null,2)}</pre></details>
+      <p>{sheet ? `Input: ${sheet.name} · ${sheet.rows.length} rows` : "Upload or reopen a spreadsheet to run this workflow."}</p>
+      {missing.length>0 && <p role="alert">Missing columns: {missing.join(", ")}. Upload a matching file or build a corrected workflow. No steps have run.</p>}
+      <p>Uses the currently selected sheet. Preview search filters do not apply. Saved workflow rules stay unchanged.</p>
+      <button className="primary-button" disabled={busy || !sheet || missing.length>0} onClick={()=>void perform(async()=> {
+        const results = cloud ? (await api<{results:ReturnType<typeof runWorkflow>}>("/api/workspace-routines",{method:"POST",body:JSON.stringify({action:"apply",id:current.id,sheet})})).results : runWorkflow(current.plan,sheet!);
+        onResults(results.flatMap((r,i)=>[{id:Date.now()+i*2,role:"user" as const,text:`${current.name} / ${r.name}: ${r.question}`},{id:Date.now()+i*2+1,role:"assistant" as const,text:r.text,plan:r.plan}]),sheet!);
+        setResult(`Completed ${results.length} steps. Review the answers in your conversation, then save the workspace to retain this run.`);
+      })}>{busy ? "Running…" : "Run workflow on current sheet"}</button>
+      <button className="secondary-button" disabled={busy} onClick={()=>void perform(async()=> {
+        if(cloud) await api("/api/workspace-routines",{method:"POST",body:JSON.stringify({action:"delete",id:current.id})});
+        else localStorage.setItem("nx-workflows",JSON.stringify(library.filter(w=>w.id!==current.id)));
+        setSelected("");await refresh();onNotice("Workflow forgotten.");
+      })}>Forget workflow</button>
+    </>}
+    {result && <p role="status">{result}</p>}
+    <button className="secondary-button" disabled={busy} onClick={()=>void perform(refresh)}>Refresh workflows</button>
+  </section>;
+}

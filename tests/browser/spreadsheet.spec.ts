@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import ExcelJS from "exceljs";
+test.beforeEach(async ({page}) => { page.on("dialog", dialog => dialog.accept()); });
 
 test("real multi-sheet Excel supports totals, category questions, matching rows and switching sheets", async ({ page, request }) => {
   const workbook = new ExcelJS.Workbook();
@@ -28,6 +29,8 @@ test("real multi-sheet Excel supports totals, category questions, matching rows 
   await ask("total Amount");
   await expect(page.getByRole("region", {name:"Conversation workspace"}).getByText(/All rows: 200/)).toBeVisible();
   await expect(page.getByRole("region", {name:"Conversation workspace"}).getByText(/All rows: -80.3/)).toHaveCount(0);
+  await page.getByLabel("Active sheet").selectOption("0");
+  await expect(page.getByRole("region", {name:"Conversation workspace"}).getByText(/All rows: -80.3/)).toBeVisible();
   await page.reload();
   await expect(page.getByRole("region", { name: "Spreadsheet preview" })).toHaveCount(0);
 });
@@ -128,4 +131,71 @@ test('explorer searches every row, reviews data and suggests questions without c
  await expect(page.getByLabel('Message Naxium')).toHaveValue('How many rows?');
  await page.getByRole('button',{name:'Send message'}).click();
  await expect(page.getByRole('region',{name:'Conversation workspace'}).getByText(/All rows: 32/)).toBeVisible();
+});
+
+test('approved workflow remembers steps and reuses them on a fresh file with schema checks', async ({page}) => {
+ await page.goto('/');
+ async function upload(name:string, csv:string) { await page.getByLabel('Upload spreadsheet').setInputFiles({name,mimeType:'text/csv',buffer:Buffer.from(csv)}); }
+ await upload('first.csv','Category,Amount\nTravel,-20\nSoftware,-10');
+ const composer=page.getByLabel('Message Naxium');
+ for(const question of ['Total Amount','How many rows?']) {
+  await composer.fill(question);await page.getByRole('button',{name:'Send message'}).click();
+  await expect(page.getByRole('button',{name:'Send message'})).toBeDisabled();
+ }
+ const builder=page.getByRole('region',{name:'Workflow builder'});
+ await builder.getByText(/Build from successful answers/).click();
+ await builder.getByLabel('Workflow name',{exact:true}).fill('Expense checks');
+ await builder.getByRole('button',{name:'Add answer 1 as step',exact:true}).click();
+ await builder.getByRole('button',{name:'Add answer 2 as step',exact:true}).click();
+ await builder.getByRole('button',{name:'Approve and remember workflow'}).click();
+ await expect(page.getByText(/Workflow remembered/)).toBeVisible();
+ await upload('new.csv','Category,Amount\nTravel,-50\nSoftware,-5\nFees,-1');
+ await builder.getByLabel('Saved workflow',{exact:true}).selectOption({label:'Expense checks'});
+ await builder.getByRole('button',{name:'Run workflow on current sheet'}).click();
+ await expect(builder.getByRole('status')).toContainText('Completed 2 steps');
+ const conversation=page.getByRole('region',{name:'Conversation workspace'});
+ await expect(conversation.getByText(/All rows: -56/)).toBeVisible();
+ await expect(conversation.getByText(/All rows: 3/)).toBeVisible();
+ await conversation.getByRole('button',{name:'Inspect 3 source rows'}).first().click();
+ await expect(page.getByText('Inspecting answer source rows.')).toBeVisible();
+ await upload('wrong.csv','Other\n1');
+ await expect(builder.getByRole('alert')).toContainText('Missing columns: Amount');
+ await expect(builder.getByRole('button',{name:'Run workflow on current sheet'})).toBeDisabled();
+ await builder.getByRole('button',{name:'Forget workflow'}).click();
+ await expect(builder.getByLabel('Saved workflow').locator('option')).toHaveCount(1);
+});
+
+test('header choice keeps original row references and explicit autosave preserves new questions',async({page})=>{
+ await page.goto('/');
+ await page.getByText('Import settings',{exact:true}).click();
+ await page.getByLabel('Header row').fill('2');
+ await page.getByLabel('Upload spreadsheet').setInputFiles({name:'bank.csv',mimeType:'text/csv',buffer:Buffer.from('Bank statement\nCategory,Amount\nTravel,-12\nSoftware,-8')});
+ const preview=page.getByRole('region',{name:'Spreadsheet preview'});
+ await expect(preview.getByRole('rowheader',{name:'3',exact:true})).toBeVisible();
+ await page.getByText('Saved work, exports & routines',{exact:true}).click();
+ await page.getByLabel('Workspace name').fill('Bank import');
+ await page.getByRole('button',{name:'Save workspace',exact:true}).click();
+ await page.getByRole('checkbox',{name:/Autosave changes/}).check();
+ await page.getByLabel('Message Naxium').fill('Total Amount');
+ await page.getByRole('button',{name:'Send message'}).click();
+ await expect(page.getByText(/All changes saved/)).toBeVisible({timeout:10000});
+ await page.reload();
+ await page.getByRole('navigation',{name:'Saved workspaces'}).getByRole('button',{name:'Bank import',exact:true}).click();
+ await expect(page.getByRole('region',{name:'Conversation workspace'}).getByText(/All rows: -20/)).toBeVisible();
+ await expect(page.getByRole('region',{name:'Spreadsheet preview'}).getByRole('rowheader',{name:'3',exact:true})).toBeVisible();
+});
+
+test('clarification and monthly results remain distinguishable and service health is minimal',async({page,request})=>{
+ await page.goto('/');
+ await page.getByLabel('Upload spreadsheet').setInputFiles({name:'periods.csv',mimeType:'text/csv',buffer:Buffer.from('Date,Amount\n2026-09-01,-10\n2026-09-15,5\n2026-10-01,-3')});
+ const chat=page.getByRole('region',{name:'Conversation workspace'});
+ await page.getByLabel('Message Naxium').fill('How much did we spend?');await page.getByRole('button',{name:'Send message'}).click();
+ await expect(chat.getByText(/Which amount column and sign convention/)).toBeVisible();
+ await expect(chat.getByRole('button',{name:/Inspect .* source rows/})).toHaveCount(0);
+ await page.getByLabel('Message Naxium').fill('Show monthly total Amount by Date');await page.getByRole('button',{name:'Send message'}).click();
+ await expect(chat.getByText(/2026-09: -5/)).toBeVisible();
+ await expect(chat.getByRole('figure',{name:'Result comparison'})).toBeVisible();
+ const health=await request.get('/api/health');expect(await health.json()).toEqual({status:'ok',service:'naxium'});
+ expect([401,404]).toContain((await request.get('/api/readiness')).status());
+ const invalid=await request.post('/api/sheet-question',{data:{}});expect(invalid.headers()['x-request-id']).toBeTruthy();
 });

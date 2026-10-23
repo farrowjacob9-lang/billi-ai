@@ -34,14 +34,19 @@ function uiError(e: unknown): UiError {
 
 // The server decides the mode (browser-only or accounts) and who is signed in before the first render.
 export function App({ caps }: { caps: Capabilities }) {
+  const [unsaved, setUnsaved] = useState(false);
   const [view, setView] = useState<View>("workspace");
   const [report, setReport] = useState<Report | null>(null);
   const [workspaceSession,setWorkspaceSession]=useState(0);
   const [sheets, setSheets] = useState<Sheet[]>([]);
+  const [headerRow, setHeaderRow] = useState(1);
   const [sheetIndex, setSheetIndex] = useState(0);
   const sheet = sheets[sheetIndex] ?? null;
+  const activeSheetRef = useRef(sheet);
+  activeSheetRef.current = sheet;
   const [runs, setRuns] = useState<Report[]>([]);
   const [routines, setRoutines] = useState<Routine[]>([]);
+  const sheetMessages = useRef<Record<string, Message[]>>({});
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
   const [replying, setReplying] = useState(false);
@@ -82,10 +87,11 @@ export function App({ caps }: { caps: Capabilities }) {
   const say = (role: Message["role"], text: string, kind?: Message["kind"]) => setMessages(previous => [...previous, { id: Date.now() + Math.random(), role, text, kind }]);
   function navigate(next: View) { setView(next); setMobileNav(false); }
   function cancelRun() { operation.current++; abort.current?.abort(); setBusy(false); }
-  function openRun(run: Report, clearMessages: boolean) { setWorkspaceSession(n=>n+1); cancelRun(); conversation.current++; setSheets([]); setReplying(false); setReport(run); setError(null); if (clearMessages) setMessages([]); navigate("workspace"); }
-  function newConversation() { setWorkspaceSession(n=>n+1); conversation.current++; setReplying(false); cancelRun(); setReport(null); setSheets([]); setMessages([]); setError(null); navigate("workspace"); }
+  function openRun(run: Report, clearMessages: boolean) { if (unsaved && !window.confirm("Discard unsaved spreadsheet changes and open this report?")) return; sheetMessages.current = {}; setWorkspaceSession(n=>n+1); cancelRun(); conversation.current++; setSheets([]); setReplying(false); setReport(run); setError(null); if (clearMessages) setMessages([]); navigate("workspace"); }
+  function newConversation() { if (unsaved && !window.confirm("Discard unsaved changes and start a new conversation?")) return; sheetMessages.current = {}; setWorkspaceSession(n=>n+1); conversation.current++; setReplying(false); cancelRun(); setReport(null); setSheets([]); setMessages([]); setError(null); navigate("workspace"); }
 
   async function runCsv(csv: string, fileName: string) {
+    if (sheet && unsaved && !window.confirm("Save your spreadsheet first if you want to keep it. Continue to the weekly report?")) return;
     cancelRun(); conversation.current++; setReplying(false);
     const current = ++operation.current, controller = new AbortController();
     abort.current = controller;
@@ -111,12 +117,13 @@ export function App({ caps }: { caps: Capabilities }) {
 
   async function upload(file: File) {
     if (busy) return;
+    if (unsaved && !window.confirm("Replace the current spreadsheet? Save it first if you want to keep your changes.")) return;
     cancelRun(); conversation.current++; setReplying(false); setBusy(true); setStage(0); setError(null); navigate("workspace");
     const current = operation.current;
     try {
-      const loaded = await readSpreadsheet(file);
+      const loaded = await readSpreadsheet(file, headerRow);
       if (current !== operation.current) return;
-      setWorkspaceSession(n=>n+1); setSheets(loaded); setSheetIndex(0); setReport(null); setMessages([]);
+      sheetMessages.current = {}; setWorkspaceSession(n=>n+1); setSheets(loaded); setSheetIndex(0); setReport(null); setMessages([]);
       say("user", `Work with ${file.name}.`, "run");
       say("assistant", `Ready: ${loaded[0].rows.length} rows and ${loaded[0].columns.length} columns in ${loaded[0].name}. Ask for a total, an average, a count, a breakdown by category or matching transactions. Use the exact column headings in your questions. Use Save workspace to keep the parsed cells and conversation for 30 days. Otherwise they stay in this tab until you refresh or start a new conversation.`, "run");
     } catch (e) { if (current === operation.current) setError(uiError(e)); }
@@ -209,11 +216,12 @@ export function App({ caps }: { caps: Capabilities }) {
   } : undefined;
 
   async function signOut() {
+    if (unsaved && !window.confirm("Sign out and discard unsaved changes?")) return;
     try { await api("/api/auth/logout", { method: "POST" }); } catch { /* the session cookie is cleared server-side either way */ }
     window.location.reload();
   }
 
-  const runSample = () => { setSheets([]); void runCsv(SAMPLE_CSV, "sample-week.csv"); };
+  const runSample = () => { void runCsv(SAMPLE_CSV, "sample-week.csv"); };
   if (signedOut) return <AuthScreen canEmail={caps.email} notice={sessionEnded ? "Your session has ended. Sign in again to pick up where you left off." : undefined} />;
   const unverified = caps.email && caps.user && !caps.user.emailVerified;
   const title = view === "routines" ? "Your routines" : view === "history" ? "Run history" : "Overview";
@@ -225,10 +233,10 @@ export function App({ caps }: { caps: Capabilities }) {
     <main className="main-shell">
       <header className="topbar"><div className="breadcrumb"><button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMobileNav(true)}><Menu size={20} /></button><button className="breadcrumb-link" onClick={() => navigate("workspace")}>Workspace</button><ChevronRight size={14} /><strong>{title}</strong></div><div className="topbar-right"><span className="prototype-badge"><span /> {copy.badge}</span><button className="icon-button" aria-label="Workspace settings" onClick={() => setModal("settings")}><Settings2 size={18} /></button></div></header>
       <div className="page-content">
-        {!signedOut && <WorkspaceTools sessionKey={workspaceSession} caps={caps} snapshot={sheet ? {sheets,sheetIndex,messages} : null} onRestore={saved => { cancelRun(); conversation.current++; setReport(null); setSheets(saved.sheets); setSheetIndex(saved.sheetIndex); setMessages(saved.messages); setError(null); setReplying(false); navigate("workspace"); }} onReview={(id,decision)=>setMessages(previous=>previous.map(m=>m.id===id?{...m,decision}:m))} onNotice={setToast} />}
+        {!signedOut && <WorkspaceTools onResults={(results, source) => { if (activeSheetRef.current !== source) { setToast("The active sheet changed while the workflow ran. Run it again on the selected sheet."); return; } conversation.current++; setReplying(false); setMessages(old => [...old,...results]); navigate("workspace"); }} onDirty={setUnsaved} sessionKey={workspaceSession} caps={caps} snapshot={sheet ? {sheets,sheetIndex,messages,sheetMessages:sheetMessages.current} : null} onRestore={saved => { sheetMessages.current = saved.sheetMessages ?? {}; cancelRun(); conversation.current++; setReport(null); setSheets(saved.sheets); setSheetIndex(saved.sheetIndex); setMessages(saved.messages); setError(null); setReplying(false); navigate("workspace"); }} onReview={(id,decision)=>setMessages(previous=>previous.map(m=>m.id===id?{...m,decision}:m))} onNotice={setToast} />}
 
         {unverified && <div className="verify-banner" role="status"><MailCheck size={18} /><p>Confirm your email to turn on the AI assistant. We sent a link to <strong>{caps.user!.email}</strong>. Reports work in the meantime.</p><button className="secondary-button" onClick={() => void resendVerification()}>Send a new link</button></div>}
-        {view === "workspace" ? <WorkspaceView onPrepareSheetReport={() => { if (!sheet) return; const csv = [sheet.columns, ...sheet.rows].map(row => row.map(c => '"' + String(c ?? "").replaceAll('"', '""') + '"').join(",")).join("\n"); void runCsv(csv, sheet.name); }} sheet={sheet} sheets={sheets} sheetIndex={sheetIndex} onSelectSheet={index => { conversation.current++; setReplying(false); setSheetIndex(index); setMessages([]); setError(null); }} report={report} messages={messages} busy={busy} replying={replying} stage={stage} error={error} privacyNote={sheet ? "Excel workbooks are parsed on our server without being saved. CSV files are parsed in this tab. AI questions are calculated on our server; Claude receives column headings and your questions only. Only Save workspace retains the parsed data and conversation." : copy.privacyNote} modeLabel={copy.modeLabel}
+        {view === "workspace" ? <WorkspaceView headerRow={headerRow} onHeaderRow={setHeaderRow} onPrepareSheetReport={() => { if (!sheet) return; const csv = [sheet.columns, ...sheet.rows].map(row => row.map(c => '"' + String(c ?? "").replaceAll('"', '""') + '"').join(",")).join("\n"); void runCsv(csv, sheet.name); }} sheet={sheet} sheets={sheets} sheetIndex={sheetIndex} onSelectSheet={index => { conversation.current++; setReplying(false); sheetMessages.current[sheetIndex] = messages; setSheetIndex(index); setMessages(sheetMessages.current[index] ?? []); setError(null); }} report={report} messages={messages} busy={busy} replying={replying} stage={stage} error={error} privacyNote={sheet ? "Excel workbooks are parsed on our server without being saved. CSV files are parsed in this tab. AI questions are calculated on our server; Claude receives column headings and your questions only. Only Save workspace retains the parsed data and conversation." : copy.privacyNote} modeLabel={copy.modeLabel}
           onPickFile={() => fileInput.current?.click()} onUpload={file => void upload(file)} onRunSample={runSample} onCancel={() => { cancelRun(); setToast("Report cancelled. Your file is unchanged."); }} onDismissError={() => setError(null)}
           onSend={text => void send(text)} onDownloadReport={() => { if (report) download(`billions-report-${report.startDate}.md`, reportMarkdown(report), "text/markdown"); }}
           onDownloadSample={() => download("billions-sample.csv", SAMPLE_CSV, "text/csv")} onSaveRoutine={() => setModal("routine")} onViewRoutines={() => navigate("routines")} />

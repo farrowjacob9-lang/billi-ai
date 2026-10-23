@@ -2,7 +2,8 @@ import { makeSheet, type Cell, type Sheet } from "../lib/sheet.ts";
 import { WorkbookReadError, workbookFailureKind } from "../lib/workbook-error.ts";
 import { randomUUID } from "node:crypto";
 
-export async function parseWorkbook(buffer: ArrayBuffer, fileName: string): Promise<Sheet[]> {
+export async function parseWorkbook(buffer: ArrayBuffer, fileName: string, headerRow = 1): Promise<Sheet[]> {
+  if (!Number.isInteger(headerRow) || headerRow < 1 || headerRow > 100) throw new Error("Choose a header row between 1 and 100.");
   // Bound declared uncompressed ZIP sizes before the workbook parser allocates cells.
   const view = new DataView(buffer);
   let end = -1;
@@ -38,9 +39,9 @@ export async function parseWorkbook(buffer: ArrayBuffer, fileName: string): Prom
   const sheets: Sheet[] = [];
   for (const ws of workbook.worksheets) {
     if (ws.state !== "visible" || !ws.rowCount) continue;
-    if (ws.rowCount > 10001 || ws.columnCount > 60 || ws.rowCount * ws.columnCount > 100060) throw new Error(`Sheet “${ws.name}” is too large. Export only the rows and columns you need.`);
+    if (ws.rowCount > 10000 + headerRow || ws.columnCount > 60 || ws.rowCount * ws.columnCount > 100060) throw new Error(`Sheet “${ws.name}” is too large. Export only the rows and columns you need.`);
     const grid: Cell[][] = [];
-    for (let r = 1; r <= ws.rowCount; r++) {
+    for (let r = headerRow; r <= ws.rowCount; r++) {
       const row: Cell[] = [];
       for (let c = 1; c <= ws.columnCount; c++) {
         const value = ws.getCell(r, c).value;
@@ -55,7 +56,7 @@ export async function parseWorkbook(buffer: ArrayBuffer, fileName: string): Prom
       }
       grid.push(row);
     }
-    sheets.push(makeSheet(`${fileName} / ${ws.name}`, grid));
+    sheets.push(makeSheet(`${fileName} / ${ws.name}`, grid, headerRow));
   }
   if (!sheets.length) throw new Error("The workbook has no visible sheets with data.");
   return sheets;
