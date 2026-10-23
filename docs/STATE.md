@@ -1,3 +1,13 @@
+## Company memory and general search — 24 October 2026
+
+Implemented explicit permanent company-memory records, cross-conversation lexical retrieval over those records and unexpired saved rows/messages, dated source cards, inspect/edit/export/delete, optimistic revisions, and a selected-reference AI review-draft flow. Records survive original-workspace deletion and are removed with the business. A Company memory library is available from the sidebar and chat toolbar; answers can be explicitly kept from chat. Retention and provider-sharing disclosures updated. No silent capture or cloud-to-local fallback. See docs/COMPANY-MEMORY.md for exact scope and owner test.
+
+Added general-chat routing with provider web search and cited links, including when a sheet is attached. Current-information requests require web citations or return a live-verification failure. Spreadsheet arithmetic still uses validated code plans. Company material/history is not included in web-search calls. Provider behaviour in automated browser tests is mocked; live production search and draft quality still need owner review.
+
+Production requires migration 007 (not applied from this environment). Full owner transaction is db/manual/007_company_memory_neon.sql, downloadable from /setup/007-company-memory.sql. The fictional quote fixture is /samples/company-memory-quote-1276.txt. Existing temporary-workspace and approach retention is unchanged.
+
+Validation: production build passes; 68 unit/database tests pass with no skips against disposable Postgres, including tenant isolation, exact identifiers, concurrent-edit revisions, expired sources and deletion. Full browser suite: 50 passed, including 13 account tests and the new memory and web-search cases. Model/email providers are fake for browser testing. Real account permissions and database storage are exercised locally.
+
 ## Calculation trust view — 24 October 2026
 
 Uploaded spreadsheets now leave chat central with the Data panel closed. Answers expose See working: plain-English operation/filter rules, included/excluded counts, arithmetic for small inputs, grouped calculations and average total/count summaries. Inspect source rows expands the actual matched rows inline (first 50, with full browsing available for larger inputs), focuses and scrolls the section into view. It no longer silently changes the right panel for ordinary inspection.

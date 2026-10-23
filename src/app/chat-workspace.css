@@ -185,3 +185,22 @@
 .answer-source-rows { min-width: 0; margin-top: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; }
 .answer-source-rows p { font-size: .8rem; color: var(--muted); }
 .answer-source-rows .sheet-scroll { max-height: 360px; }
+
+.memory-dialog { width: min(1050px,94vw); max-height: 90dvh; overflow: auto; border: 1px solid var(--border); border-radius: 16px; padding: 24px; background: var(--surface); color: var(--ink); }
+.memory-dialog::backdrop { background: #0007; }
+.memory-dialog header { display:flex; justify-content:space-between; gap:16px; margin-bottom:16px; }
+.memory-dialog p { line-height:1.6; margin:10px 0; }
+.memory-dialog label { display:grid; gap:8px; margin:12px 0; }
+.memory-dialog input,.memory-dialog textarea { width:100%; border:1px solid var(--border); background:var(--paper); color:var(--ink); border-radius:8px; padding:10px; font:inherit; }
+.memory-layout { display:grid; grid-template-columns: 220px minmax(0,1fr); gap:24px; margin:20px 0; }
+.memory-record,.memory-citation { display:grid; gap:6px; text-align:left; background:var(--paper); border:1px solid var(--border); color:var(--ink); padding:12px; border-radius:9px; width:100%; margin:8px 0; }
+.memory-record small,.memory-citation small,.memory-disclosure { color:var(--muted); font-size:11px; }
+.memory-actions,.memory-search { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+.memory-search label { flex:1; }
+.memory-citations { margin-top:16px; }
+.memory-citation span { white-space:pre-wrap; font-size:12px; max-height:120px; overflow:auto; }
+.memory-context { display:flex; gap:10px; flex-wrap:wrap; align-items:center; font-size:12px; padding:8px; margin-bottom:8px; background:var(--mint); border-radius:8px; }
+.memory-hit { border-bottom:1px solid var(--border); padding:12px 0; }
+.remember-answer { font-size:11px; margin-top:12px; color:var(--muted); }
+@media(max-width:640px){.memory-layout{grid-template-columns:1fr}.memory-dialog{padding:16px}.memory-dialog header{flex-wrap:wrap}.memory-layout nav{max-height:180px;overflow:auto}}
+.chat-source-link { text-decoration:underline; text-underline-offset:3px; overflow-wrap:anywhere; }

@@ -324,3 +324,32 @@ test("parallel method acceptance cannot create conflicting defaults", {skip},asy
  assert.equal(competing.filter(r=>r.status==='fulfilled').length,1);
  assert.equal((await m.methods.listMethods(session.businessId))[0].revision,2);
 });
+
+test('company memory CRUD enforces tenant access, revisions and independent retention', {skip}, async()=>{
+ const mem=await import('../src/server/company-memory.ts');
+ const a=(await signUp('memory-owner@example.com')).session,b=(await signUp('memory-other@example.com')).session;
+ const record=await mem.saveMemory(a.businessId,a.userId,{title:'Quote 1276 — Dave’s Electrical',body:'Install lighting. Price 1200 AUD.'});
+ assert.equal((await mem.searchMemory(a.businessId,'quote 1276'))[0].id,record.id);
+ await mem.saveMemory(a.businessId,a.userId,{title:'Dave reference 2200',body:'Second reference.'});assert.equal((await mem.searchMemory(a.businessId,'Dave')).length,2);
+ assert.equal(typeof (await mem.listMemory(a.businessId))[0].updated_at,'string');
+ assert.deepEqual(await mem.searchMemory(b.businessId,'1276'),[]);
+ await assert.rejects(mem.getMemory(b.businessId,record.id),{status:404});
+ await assert.rejects(mem.saveMemory(b.businessId,b.userId,{title:'Intrusion',body:'Wrong'},record.id,1),{status:409});
+ const updated=await mem.saveMemory(a.businessId,a.userId,{title:record.title,body:'Lighting and switchboards.'},record.id,1);assert.equal(updated.revision,2);
+ await assert.rejects(mem.saveMemory(a.businessId,a.userId,{title:'Stale',body:'Bad'},record.id,1),{status:409});
+ await assert.rejects(mem.deleteMemory(a.businessId,a.userId,record.id,1),{status:409});
+ assert.equal((await mem.getMemory(a.businessId,record.id)).body,'Lighting and switchboards.');
+ await mem.deleteMemory(a.businessId,a.userId,record.id,2);assert.deepEqual(await mem.searchMemory(a.businessId,'1276'),[]);
+});
+test('company-memory retrieval searches saved rows and conversations but excludes expired or foreign work', {skip}, async()=>{
+ const mem=await import('../src/server/company-memory.ts');const a=(await signUp('memory-sources@example.com')).session,b=(await signUp('memory-foreign@example.com')).session;
+ const snapshot={sheets:[{name:'Quotes',columns:['Quote','Customer','Scope'],rows:[[1276,"Dave’s Electrical",'Lighting']]}],sheetIndex:0,messages:[{id:1277,role:'user',text:'Quote 2201 for Acacia: customer requested staged delivery.'}]};
+ const id=await m.db.withTenant(a.businessId,async c=>(await c.query('INSERT INTO workspaces(business_id,name,snapshot) VALUES($1,$2,$3) RETURNING id',[a.businessId,'Sales quotes',snapshot])).rows[0].id);
+ const row=(await mem.searchMemory(a.businessId,'quote 1276'))[0];assert.equal(row.id,id);assert.equal(row.row,2);assert.equal(row.kind,'workspace');
+ assert.equal((await mem.searchMemory(a.businessId,'quote 2201'))[0].messageId,1277);
+ assert.deepEqual(await mem.searchMemory(b.businessId,'1276'),[]);
+ const permanent=await mem.saveMemory(a.businessId,a.userId,{title:'Quote 1276',body:'Lighting',sourceWorkspaceId:id,sourceMessageId:1277});
+ await m.db.withTenant(a.businessId,async c=>{await c.query("UPDATE workspaces SET expires_at=now()-interval '1 day' WHERE id=$1",[id]);});
+ assert.deepEqual(await mem.searchMemory(a.businessId,'2201'),[]);
+ await m.db.withTenant(a.businessId,async c=>{await c.query('DELETE FROM workspaces WHERE id=$1',[id]);});assert.equal((await mem.getMemory(a.businessId,permanent.id)).title,'Quote 1276');
+});

@@ -21,6 +21,7 @@ export const POST = route(async request => {
   const history = Array.isArray(body.history) ? body.history.filter((q): q is string => typeof q === "string").slice(-6).map(q => q.slice(0, 2000)) : [];
   // Rows stay on our server. Only headings and user questions go to the model.
   const plan = await aiContext.run({ businessId: session?.businessId ?? "", operation: "spreadsheet-question" }, () => planSheetQuestion(question, sheet.columns, history, request.signal, revision));
+  if(plan && typeof plan==="object" && "general" in plan && plan.general===true)return ok({general:true});
   if (plan && typeof plan === "object" && "clarification" in plan && typeof plan.clarification === "string" && plan.clarification.length <= 500) return ok({reply:plan.clarification, clarification:true});
   if (!plan) return ok({ reply: "The AI assistant couldn't interpret that question right now. Try again, or ask a simple question such as ‘total Amount’ or ‘how many rows’." });
   try { const checked=canonicalPlan(plan,sheet);return ok({ reply: executePlan(sheet, checked), plan:checked }); }

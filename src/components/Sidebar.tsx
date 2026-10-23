@@ -6,14 +6,14 @@ import { useState } from "react";
 import type { View } from "@/lib/types";
 
 type Props = {
-  view: View; workflowActive: boolean; open: boolean; runs: Report[]; routineCount: number;
+  onMemory:()=>void;view: View; workflowActive: boolean; open: boolean; runs: Report[]; routineCount: number;
   workspaceName: string; workspaceDetail: string; accountLabel: string; accountDetail: string;
   savedWork: WorkReference[]; activeWorkId:string; onOpenWork:(id:string)=>void;
   onWorkflows: () => void;
   onNavigate: (view: View) => void; onNewConversation: () => void; onOpenRun: (run: Report) => void; onSettings: () => void; onClose: () => void;
 };
 
-export function Sidebar({ view, workflowActive, open, runs, routineCount, workspaceName, workspaceDetail, accountLabel, accountDetail, savedWork, activeWorkId, onOpenWork, onWorkflows, onNavigate, onNewConversation, onOpenRun, onSettings, onClose }: Props) {
+export function Sidebar({ onMemory, view, workflowActive, open, runs, routineCount, workspaceName, workspaceDetail, accountLabel, accountDetail, savedWork, activeWorkId, onOpenWork, onWorkflows, onNavigate, onNewConversation, onOpenRun, onSettings, onClose }: Props) {
   const [query,setQuery] = useState("");
   const items = [...savedWork.map(w=>({id:w.id,name:w.name,date:w.updated_at??"",kind:"work" as const})),...runs.map(r=>({id:r.id,name:r.fileName,date:r.createdAt,kind:"report" as const}))].filter(w=>w.name.toLowerCase().includes(query.toLowerCase())).sort((a,b)=>b.date.localeCompare(a.date));
   return <>
@@ -26,6 +26,7 @@ export function Sidebar({ view, workflowActive, open, runs, routineCount, worksp
       <nav>
         <NavItem active={view === "workspace"} onClick={() => onNavigate("workspace")} icon={<MessageSquare size={18}/>} label="Your work" />
         <NavItem active={view === "workflows"} onClick={onWorkflows} icon={<Zap size={18}/>} label="Workflows" />
+        <NavItem active={false} onClick={()=>{onMemory();onClose();}} icon={<MessageSquare size={18}/>} label="Company memory" />
         <NavItem active={view === "history"} onClick={() => onNavigate("history")} icon={<History size={18}/>} label="Activity" />
       </nav>
       <div className="nav-label recent-label">YOUR WORK <button aria-label="Start a new conversation" onClick={onNewConversation}><Plus size={15}/></button></div>

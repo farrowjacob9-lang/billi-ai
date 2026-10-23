@@ -7,6 +7,9 @@ import { HistoryView, RoutinesView } from "@/components/ListViews";
 import { Sidebar } from "@/components/Sidebar";
 import { Toast } from "@/components/ui";
 import {parseWorkHash,writeWorkLocation,type WorkReference,type WorkLocation} from "@/lib/work-navigation";
+import {MemoryLibrary} from "@/components/MemoryLibrary";
+import {MemoryStore} from "@/lib/memory-store";
+import {memoryIntent,memoryTerms,type MemoryInput,type MemoryRecord,type MemoryReference} from "@/lib/company-memory";
 import { MethodsLibrary } from "@/components/MethodsLibrary";
 import { MethodStore } from "@/lib/method-store";
 import { canonicalPlan, inputEvidence, recognizeMethod, simpleCorrection, oneOffIntent, type LearnedMethod, type MethodRef, type TaskContext } from "@/lib/methods";
@@ -64,7 +67,7 @@ export function App({ caps }: { caps: Capabilities }) {
   const [headerRow, setHeaderRow] = useState(1);
   const [sheetIndex, setSheetIndex] = useState(0);
   const sheet = sheets[sheetIndex] ?? null;
-  useEffect(() => { setPanel(null); }, [sheet]);
+  useEffect(() => { setPanel(null);setMemoryContext(null); }, [sheet]);
   useEffect(() => { if(report) setPanel("results"); }, [report]);
   useEffect(() => { if(salesDraft) setPanel("workflow"); }, [salesDraft]);
   const activeSheetRef = useRef(sheet);
@@ -95,6 +98,11 @@ export function App({ caps }: { caps: Capabilities }) {
   const [methodError,setMethodError]=useState("");
   const [methodBusy,setMethodBusy]=useState(false);
   const [methodFocus,setMethodFocus]=useState<{id:string;token:number}|null>(null);
+  const memoryStore=useMemo(()=>new MemoryStore(caps.mode==="cloud"),[caps.mode,caps.user?.email]);
+  const [memoryOpen,setMemoryOpen]=useState(false);
+  const [memorySeed,setMemorySeed]=useState<MemoryInput|undefined>();
+  const [memoryFocus,setMemoryFocus]=useState<string|undefined>();
+  const [memoryContext,setMemoryContext]=useState<MemoryRecord|null>(null);
   const [blockedTask,setBlockedTask]=useState("");
   const methodLoad=useRef(0);
   const methodAction=useRef(false);
@@ -151,7 +159,7 @@ export function App({ caps }: { caps: Capabilities }) {
     setMessages(reportChats.current[run.id] ?? [{id:Date.now(),role:"assistant",kind:"run",text:`Opened ${run.fileName}, covering ${run.startDate} to ${run.endDate}. This saved report contains calculated totals; an earlier conversation is not retained after reload. Ask about these results to continue.`}]);
     navigate("workspace");setPanel("results");
   }
-  function newConversation() { if (unsaved && !window.confirm("Discard unsaved changes and start a new conversation?")) {navigate("workspace",true);return;} setComposerDraft("");threadPosition.current=null;activeWorkRef.current=null;activeReportRef.current=null;setWorkIdentity(null);setPanel(null);sheetMessages.current = {}; setWorkspaceSession(n=>n+1); conversation.current++; setReplying(false); cancelRun(); setReport(null); setSheets([]); setMessages([]); setError(null); navigate("workspace"); }
+  function newConversation() { if (unsaved && !window.confirm("Discard unsaved changes and start a new conversation?")) {navigate("workspace",true);return;} setMemoryContext(null);setComposerDraft("");threadPosition.current=null;activeWorkRef.current=null;activeReportRef.current=null;setWorkIdentity(null);setPanel(null);sheetMessages.current = {}; setWorkspaceSession(n=>n+1); conversation.current++; setReplying(false); cancelRun(); setReport(null); setSheets([]); setMessages([]); setError(null); navigate("workspace"); }
 
   async function runCsv(csv: string, fileName: string) {
     if (sheet && unsaved && !window.confirm("Save your spreadsheet first if you want to keep it. Continue to the weekly report?")) return;
@@ -240,6 +248,30 @@ export function App({ caps }: { caps: Capabilities }) {
     }catch(e){return (e as Error).message;}finally{methodAction.current=false;setMethodBusy(false);}
   }
 
+  function openMemory(){setMemorySeed(undefined);setMemoryFocus(undefined);setMemoryOpen(true);}
+  function rememberAnswer(message:Message){setMemoryFocus(undefined);setMemorySeed({title:(message.task?.question??"Business reference").slice(0,120),body:message.text.slice(0,20000),...(workIdentity?{sourceWorkspaceId:workIdentity.id,sourceMessageId:message.id}:{})});setMemoryOpen(true);}
+  function openReference(reference:MemoryReference){
+    if(reference.kind==="workspace"){openWork(reference.id);setToast(reference.row?`Source: sheet ${1+(reference.sheetIndex??0)}, row ${reference.row}.`:'Opening the saved conversation.');return;}
+    setMemorySeed(undefined);setMemoryFocus(reference.id);setMemoryOpen(true);
+  }
+  async function memoryReply(text:string):Promise<boolean>{
+    if(/\b(weather|news|latest news)\b/i.test(text) || (sheet && simplePlan(text,sheet)))return false;
+    if(!memoryContext && (!memoryIntent(text) || (!memoryTerms(text).length && !/\b(memory|remember|previous|earlier)\b/i.test(text))))return false;
+    const asked=conversation.current;setReplying(true);
+    try {
+      let reply:string, references:MemoryReference[];
+      if(memoryContext){
+        if(caps.mode!=="cloud" || !caps.ai){const r=await memoryStore.get(memoryContext.id);reply="Reference material — "+r.title+"\n\n"+r.body+"\n\nAI drafting needs an enabled business account. This reference has not been changed.";references=[{id:r.id,title:r.title,excerpt:r.body.slice(0,1000),updatedAt:r.updated_at,revision:r.revision,kind:"memory"}];}
+        else {const result=await api<{reply:string;references:MemoryReference[]}>("/api/memory/draft",{method:"POST",body:JSON.stringify({id:memoryContext.id,revision:memoryContext.revision,question:text})});reply=result.reply;references=result.references;}
+      }else{
+        references=await memoryStore.search(text);
+        if(!references.length){if(/\b(memory|remember|previous|earlier|quote|quotation|quotes)\b/i.test(text)){reply="I couldn't find a matching record in your saved company material. Add the quote or note to Company memory, or save the workspace containing it. I haven't invented a reference.";}else return false;}
+        else reply=references.length===1?"I found this saved reference. Open the source to inspect it. For a permanent memory, choose Use in chat to adapt it into a draft.":"I found several possible references. Open the one you mean before using it as a starting point; I haven't assumed which is correct.";
+      }
+      if(asked===conversation.current)setMessages(old=>[...old,{id:Date.now()+Math.random(),role:"assistant",text:reply,memoryReferences:references}]);
+      return true;
+    }catch(e){if(asked===conversation.current)say("assistant",(e as Error).message);return true;}finally{if(asked===conversation.current)setReplying(false);}
+  }
   async function send(text: string, fresh=false) {
     setBlockedTask("");
     say("user", text);
@@ -247,6 +279,7 @@ export function App({ caps }: { caps: Capabilities }) {
     if (/^(?:show|open)(?: my| the)? activity[.!]?$/i.test(text.trim())) {navigate("history");return;}
     const runRequest=text.trim().match(/^run (?:the )?workflow [“"']?(.+?)[”"']?[.!]?$/i);
     if(runRequest) {setManualWorkflowsOpen(true);setWorkflowRequest({name:runRequest[1].trim(),token:Date.now()});setPanel("workflow");return;}
+    if(await memoryReply(text))return;
     if (sheet) {
       const workflowIntent = /(?:create|build|make|set up).*?(?:daily.*sales.*review|sales.*workflow)/i.test(text);
       const continuing = /follow.?up date/i.test(text) && messages.some(m => m.role === "user" && /daily sales review/i.test(m.text));
@@ -278,7 +311,7 @@ export function App({ caps }: { caps: Capabilities }) {
         if (plan) { answer = executePlan(sheet, plan); usedPlan = plan; }
         else if (caps.ai) {
           const history = messages.filter(m => m.role === "user" && m.kind !== "run").slice(-6).map(m => m.text);
-          const result = await api<{ reply: string; plan?: import("@/lib/sheet").Plan }>("/api/sheet-question", { method: "POST", body: JSON.stringify({ sheet, question: text, history }) }); answer = result.reply; usedPlan = result.plan;
+          const result = await api<{ reply: string; general?:boolean; plan?: import("@/lib/sheet").Plan }>("/api/sheet-question", { method: "POST", body: JSON.stringify({ sheet, question: text, history }) }); if(result.general){const general=await api<{reply:string|null}>("/api/chat",{method:"POST",body:JSON.stringify({question:text,general:true,history:messages.filter(m=>m.kind!=="run").slice(-6).map(({role,text})=>({role,text}))})});answer=general.reply??"I couldn’t answer that right now. Please try again.";}else answer = result.reply; usedPlan = result.plan;
         } else answer = `Open-ended questions need an AI connection on this deployment. You can still ask “how many rows”, “total ${sheet.columns[0]}” or “average ${sheet.columns[0]}” (use a numeric column for totals and averages).`;
         if(usedPlan && !evidence)evidence=await inputEvidence(sheet,usedPlan);
       } catch (e) { answer = e instanceof Error ? e.message : "The question couldn't be answered. Try again."; usedPlan=undefined;learned=undefined;evidence=undefined; }
@@ -291,7 +324,7 @@ export function App({ caps }: { caps: Capabilities }) {
     let answer: string;
     try {
       const history = messages.filter(m => m.kind !== "run").slice(-8).map(({ role, text }) => ({ role, text }));
-      const { reply } = await api<{ reply: string | null }>("/api/chat", { method: "POST", body: JSON.stringify({ question: text, report: about && compactForModel(about), history }) });
+      const { reply } = await api<{ reply: string | null }>("/api/chat", { method: "POST", body: JSON.stringify({ question: text, general:!about, report: about && compactForModel(about), history }) });
       answer = reply || localReply(text, about, true);
     } catch (e) { answer = e instanceof ApiError && e.status === 429 ? e.message : localReply(text, about, true); }
     if (conversation.current !== asked) return;
@@ -365,7 +398,7 @@ export function App({ caps }: { caps: Capabilities }) {
 
   const methodsLibrary=<MethodsLibrary methods={methods} store={methodStore} sheet={sheet} error={methodError} focus={methodFocus} onRefresh={loadMethods} onRun={question=>{navigate("workspace");void send(question);}} onNotice={setToast}/>;
   return <div className={`app-shell ${view === "workspace" ? "chat-app" : ""}`}>
-    <Sidebar savedWork={savedWork} activeWorkId={workIdentity?.id??""} onOpenWork={openWork} workflowActive={view === "workspace" && panel === "workflow"} view={view} open={mobileNav} runs={runs} routineCount={routines.length} workspaceName={copy.workspaceName} workspaceDetail={copy.workspaceDetail} accountLabel={copy.accountLabel} accountDetail={copy.accountDetail}
+    <Sidebar onMemory={openMemory} savedWork={savedWork} activeWorkId={workIdentity?.id??""} onOpenWork={openWork} workflowActive={view === "workspace" && panel === "workflow"} view={view} open={mobileNav} runs={runs} routineCount={routines.length} workspaceName={copy.workspaceName} workspaceDetail={copy.workspaceDetail} accountLabel={copy.accountLabel} accountDetail={copy.accountDetail}
       onWorkflows={() => navigate("workflows")} onNavigate={navigate} onNewConversation={newConversation} onOpenRun={run => openRun(run, false)} onSettings={() => setModal("settings")} onClose={() => setMobileNav(false)} />
 
     <main className="main-shell">
@@ -374,7 +407,7 @@ export function App({ caps }: { caps: Capabilities }) {
         {!signedOut && <WorkspaceTools workflowRequest={workflowRequest} onSavedList={setSavedWork} requestedWork={requestedWork} onActive={work=>{activeWorkRef.current=work;activeReportRef.current=null;setWorkIdentity(work);writeWorkLocation({view:"workspace",...(work?{workId:work.id}:{})},true);}} onOpenSource={openWork} onContinueChat={()=>{setManualWorkflowsOpen(true);navigate("workspace");setPanel("workflow");}} onPickInput={()=>{reportInput.current=false;fileInput.current?.click();}} toolsMount={toolsMount} workflowMount={workflowMount} onStatus={setSaveStatus} salesDraft={salesDraft} onCloseSalesDraft={() => setSalesDraft(false)} onResults={(results, source) => { if (activeSheetRef.current !== source) { setToast("The active sheet changed while the workflow ran. Run it again on the selected sheet."); return; } conversation.current++; setReplying(false); setMessages(old => [...old,...results]); navigate("workspace"); }} onDirty={setUnsaved} sessionKey={workspaceSession} caps={caps} snapshot={sheet ? {sheets,sheetIndex,messages,sheetMessages:sheetMessages.current} : null} onRestore={(saved,work) => {setComposerDraft("");threadPosition.current=null;activeWorkRef.current=work;activeReportRef.current=null;setWorkIdentity(work); sheetMessages.current = saved.sheetMessages ?? {}; cancelRun(); conversation.current++; setReport(null); setSheets(saved.sheets); setSheetIndex(saved.sheetIndex); setMessages([...saved.messages,...(requestedWork?.id===work.id ? requestedWork.messages??[] : [])]); setError(null); setReplying(false); navigate("workspace"); }} onReview={(id,decision)=>setMessages(previous=>previous.map(m=>m.id===id?{...m,decision}:m))} onNotice={setToast} />}
 
         {unverified && <div className="verify-banner" role="status"><MailCheck size={18} /><p>Confirm your email to turn on the AI assistant. We sent a link to <strong>{caps.user!.email}</strong>. Reports work in the meantime.</p><button className="secondary-button" onClick={() => void resendVerification()}>Send a new link</button></div>}
-        {view === "workspace" ? <WorkspaceView advancedWorkflow={manualWorkflowsOpen} onAdvancedWorkflow={setManualWorkflowsOpen} methodsLibrary={methodsLibrary} methodBusy={methodBusy} methodStorage={methodStore.storage()} onAcceptAnswer={acceptAnswer} onCorrectAnswer={correctAnswer} onInspectMethod={inspectMethod} blockedTask={blockedTask} onFreshTask={()=>void send(blockedTask,true)} draft={composerDraft} onDraft={setComposerDraft} threadPosition={threadPosition} workName={workIdentity?.name} panel={panel} onPanel={setPanel} onToolsMount={setToolsMount} onWorkflowMount={setWorkflowMount} saveStatus={saveStatus} headerRow={headerRow} onHeaderRow={setHeaderRow} onPrepareSheetReport={() => { if (!sheet) return; const csv = [sheet.columns, ...sheet.rows].map(row => row.map(c => '"' + String(c ?? "").replaceAll('"', '""') + '"').join(",")).join("\n"); void runCsv(csv, sheet.name); }} sheet={sheet} sheets={sheets} sheetIndex={sheetIndex} onSelectSheet={index => { conversation.current++; setReplying(false); sheetMessages.current[sheetIndex] = messages; setSheetIndex(index); setMessages(sheetMessages.current[index] ?? []); setError(null); }} report={report} messages={messages} busy={busy} replying={replying||methodBusy} stage={stage} error={error} privacyNote={sheet ? "Excel workbooks are parsed on our server without being saved. CSV files are parsed in this tab. AI questions are calculated on our server; Claude receives column headings, your questions and any calculation rules you ask it to adjust, not source rows. Save workspace retains cells and conversation. Accepting matching requests retains the approach separately, as shown on the result." : copy.privacyNote} modeLabel={copy.modeLabel}
+        {view === "workspace" ? <WorkspaceView onMemory={openMemory} onRemember={rememberAnswer} onReference={openReference} memoryContext={memoryContext?.title} onClearMemory={()=>setMemoryContext(null)} advancedWorkflow={manualWorkflowsOpen} onAdvancedWorkflow={setManualWorkflowsOpen} methodsLibrary={methodsLibrary} methodBusy={methodBusy} methodStorage={methodStore.storage()} onAcceptAnswer={acceptAnswer} onCorrectAnswer={correctAnswer} onInspectMethod={inspectMethod} blockedTask={blockedTask} onFreshTask={()=>void send(blockedTask,true)} draft={composerDraft} onDraft={setComposerDraft} threadPosition={threadPosition} workName={workIdentity?.name} panel={panel} onPanel={setPanel} onToolsMount={setToolsMount} onWorkflowMount={setWorkflowMount} saveStatus={saveStatus} headerRow={headerRow} onHeaderRow={setHeaderRow} onPrepareSheetReport={() => { if (!sheet) return; const csv = [sheet.columns, ...sheet.rows].map(row => row.map(c => '"' + String(c ?? "").replaceAll('"', '""') + '"').join(",")).join("\n"); void runCsv(csv, sheet.name); }} sheet={sheet} sheets={sheets} sheetIndex={sheetIndex} onSelectSheet={index => { conversation.current++; setReplying(false); sheetMessages.current[sheetIndex] = messages; setSheetIndex(index); setMessages(sheetMessages.current[index] ?? []); setError(null); }} report={report} messages={messages} busy={busy} replying={replying||methodBusy} stage={stage} error={error} privacyNote={sheet ? "Excel workbooks are parsed on our server without being saved. CSV files are parsed in this tab. AI questions are calculated on our server; Claude receives column headings, your questions and any calculation rules you ask it to adjust, not source rows. Save workspace retains cells and conversation for 30 days. Company memory keeps only material you explicitly save there, until deleted; using a record for an AI draft sends its text to the provider. Accepting matching requests retains the approach separately, as shown on the result." : copy.privacyNote} modeLabel={copy.modeLabel}
           onPickFile={() => {reportInput.current=false;fileInput.current?.click();}} onUpload={file => {reportInput.current=false;void upload(file);}} onRunSample={runSample} onCancel={() => { cancelRun(); setToast("Report cancelled. Your file is unchanged."); }} onDismissError={() => setError(null)}
           onSend={text => void send(text)} onDownloadReport={() => { if (report) download(`billions-report-${report.startDate}.md`, reportMarkdown(report), "text/markdown"); }}
           onDownloadSample={() => download("billions-sample.csv", SAMPLE_CSV, "text/csv")} onSaveRoutine={() => setModal("routine")} onViewRoutines={() => navigate("routines")} />
@@ -385,6 +418,7 @@ export function App({ caps }: { caps: Capabilities }) {
     </main>
 
     <input className="sr-only" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-label="Upload spreadsheet" ref={fileInput} onChange={e => { const file = e.target.files?.[0]; if (file) void upload(file); e.target.value = ""; }} />
+    {memoryOpen && <MemoryLibrary store={memoryStore} seed={memorySeed} focus={memoryFocus} onClose={()=>setMemoryOpen(false)} onUse={record=>{setMemoryContext(record);setMemoryOpen(false);navigate("workspace");setComposerDraft("Help me adapt this reference for ");requestAnimationFrame(()=>document.getElementById("message")?.focus());}} onOpenWork={id=>{setMemoryOpen(false);openWork(id);}}/>}
     <AppDialog modal={modal} settings={copy.settings} businessName={copy.workspaceName} onClose={() => setModal(null)} onOpen={setModal} onSaveRoutine={saveRoutine} onManageHistory={() => { setModal(null); navigate("history"); }} onSignOut={caps.user ? () => void signOut() : undefined} account={account} />
     {toast && <Toast text={toast} onDismiss={() => setToast("")} />}
   </div>;

@@ -9,8 +9,11 @@ type Body = { system?: string; messages?: { role: string; content: string }[] };
 
 function reply(body: Body): string {
   const last = String(body.messages?.at(-1)?.content ?? "");
+  if(body.system?.includes("Create a REVIEW DRAFT"))return "Draft for John’s Electrical\nScope reused from reference: install lighting.\nPrice [Review]. New address [To confirm]. Total [Total to confirm].";
+  if(body.system?.includes("helpful business assistant"))return "Melbourne weather: test forecast, 18 degrees. Check the cited forecast before planning outdoor work.";
   if (body.system?.includes("Translate a spreadsheet question")) {
     const request = JSON.parse(last);
+    if(/weather|explain a business plan/i.test(request.question))return JSON.stringify({general:true});
     if(request.revision) {
       if(/only posted/i.test(request.revision.correction))return JSON.stringify({clarification:"Posted appears in more than one column. Which column should determine inclusion?"});
       if(/invent/i.test(request.revision.correction))return JSON.stringify({operation:"sum",column:"Imaginary"});
@@ -41,7 +44,7 @@ createServer((request, response) => {
     response.setHeader("content-type", "application/json");
     response.end(JSON.stringify({
       id: `msg_fake_${received.length}`, type: "message", role: "assistant", model: "fake",
-      content: [{ type: "text", text: reply(body) }], stop_reason: "end_turn", stop_sequence: null,
+      content: [{ type: "text", text: reply(body), ...(body.system?.includes("helpful business assistant")?{citations:[{type:"web_search_result_location",url:"https://www.bom.gov.au/places/vic/melbourne/forecast/",title:"Melbourne forecast",encrypted_index:"test",cited_text:"test forecast"}]}:{}) }], stop_reason: "end_turn", stop_sequence: null,
       usage: { input_tokens: 1, output_tokens: 1 },
     }));
   });

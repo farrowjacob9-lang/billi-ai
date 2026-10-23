@@ -394,7 +394,7 @@ export function WorkspaceTools({
           </button>
         </div>
       )}
-      {cloud && <details onToggle={e => { if (e.currentTarget.open) void api<Record<string, boolean>>("/api/readiness").then(setReadiness).catch(e => onNotice(e.message)); }}><summary>Service connections</summary>{readiness && Object.entries(readiness).map(([key, ready]) => <p key={key}>{({learnedMethods:"Established approaches",storage:"Saved work",ai:"AI provider",accountEmail:"Account emails",scheduledWorkflows:"Scheduled workflows",billing:"Paid subscriptions"} as Record<string,string>)[key] ?? key}: {ready ? "Configured" : "Not connected"}</p>)}<p>Configuration status does not prove delivery or availability. Scheduled workflows run against saved data, not live bank feeds.</p></details>}
+      {cloud && <details onToggle={e => { if (e.currentTarget.open) void api<Record<string, boolean>>("/api/readiness").then(setReadiness).catch(e => onNotice(e.message)); }}><summary>Service connections</summary>{readiness && Object.entries(readiness).map(([key, ready]) => <p key={key}>{({companyMemory:"Company memory",learnedMethods:"Established approaches",storage:"Saved work",ai:"AI provider",accountEmail:"Account emails",scheduledWorkflows:"Scheduled workflows",billing:"Paid subscriptions"} as Record<string,string>)[key] ?? key}: {ready ? "Configured" : "Not connected"}</p>)}<p>Configuration status does not prove delivery or availability. Scheduled workflows run against saved data, not live bank feeds.</p></details>}
       <details>
         <summary>Review answers</summary>
         {snapshot?.messages

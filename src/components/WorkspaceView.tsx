@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowDownToLine, ArrowUp, ArrowUpRight, FileSpreadsheet, Paperclip, Play, Settings2, Sparkles, Upload, X } from "lucide-react";
+import type {MemoryReference} from "@/lib/company-memory";
 import { AnswerLearning } from "@/components/AnswerLearning";
 import type {MethodRef} from "@/lib/methods";
 import type {MethodStorage} from "@/lib/method-store";
@@ -26,6 +27,8 @@ const STAGES = [
 ];
 
 type Props = {
+  onMemory:()=>void;onRemember:(message:Message)=>void;onReference:(reference:MemoryReference)=>void; memoryContext?:string;onClearMemory:()=>void;
+
   advancedWorkflow:boolean;onAdvancedWorkflow:(open:boolean)=>void;
   methodsLibrary:React.ReactNode; methodBusy:boolean; methodStorage:MethodStorage;
   onAcceptAnswer:(message:Message,scope:"once"|"matching")=>Promise<string|null>;
@@ -61,7 +64,7 @@ export function WorkspaceView(props: Props) {
   const inspect=(rows:number[])=> {setSourceRows(rows);props.onPanel("data");};
   function send(event:FormEvent) {event.preventDefault();const text=draft.trim();if(!text || busy || replying)return;setDraft("");follow.current=true;setAtLatest(true);props.onSend(text);}
   function answer(message:Message) {
-    if(!message.plan || !props.sheet)return message.text;
+    if(!message.plan || !props.sheet)return <LinkedText text={message.text}/>;
     let current=false;try{current=evaluatePlan(props.sheet,message.plan).text===message.text;}catch{/* Historical answer remains text. */}
     return <><SheetAnswer sheet={props.sheet} plan={message.plan} text={message.text} onSources={inspect}/>{current && <AnswerLearning key={message.id} message={message} disabled={busy||replying||props.methodBusy} storage={props.methodStorage} onAccept={props.onAcceptAnswer} onCorrect={props.onCorrectAnswer} onInspect={props.onInspectMethod}/>}</>;
   }
@@ -78,6 +81,7 @@ export function WorkspaceView(props: Props) {
         tabs[next].focus();tabs[next].click();
       }}>
         {(["data","workflow","results"] as const).map(tab=><button key={tab} role="tab" aria-selected={props.panel===tab} aria-controls={`pane-${tab}`} disabled={tab==="data" && !props.sheet} onClick={()=>props.onPanel(props.panel===tab?null:tab)}>{tab==="data"?"Data":tab==="workflow"?"Workflow":"Results"}</button>)}
+        <button aria-label="Company memory" onClick={props.onMemory}>Memory</button>
         <button aria-label="Workspace tools" title="Save, export and settings" onClick={()=>props.onPanel(props.panel==="manage"?null:"manage")}><Settings2 size={17}/></button>
       </div>
     </div>
@@ -87,13 +91,14 @@ export function WorkspaceView(props: Props) {
           {dragging && <div className="drop-overlay"><Upload size={28}/><strong>Drop your spreadsheet here</strong><span>Excel or CSV · up to 2 MB</span></div>}
           <div className={`conversation-body ${messages.length?"has-messages":"empty-thread"}`} ref={body} onScroll={e=>{const el=e.currentTarget;const latest=el.scrollHeight-el.scrollTop-el.clientHeight<80;follow.current=latest;setAtLatest(latest);props.threadPosition.current={top:el.scrollTop,follow:latest};}}>
             {!messages.length ? <div className="chat-welcome"><Sparkles size={28}/><h2>What would you like to work on?</h2><p>Bring a spreadsheet. Ask a question. Build a way of working.</p><div className="starter-actions"><button disabled={busy} onClick={props.onPickFile}><FileSpreadsheet size={17}/> Upload a spreadsheet</button><button disabled={busy} onClick={props.onRunSample}><Play size={17}/> Try a sample report</button><button onClick={()=>{setDraft("Help me work with this spreadsheet.");document.getElementById("message")?.focus();}}>Help with a task <ArrowUpRight size={15}/></button></div></div>
-              : <div className="message-list" aria-live="polite">{messages.map(message=><div className={`message ${message.role}`} key={message.id}>{message.role==="assistant" && <span className="message-avatar"><Sparkles size={15}/></span>}<div>{answer(message)}</div></div>)}{replying && <div className="message assistant"><span className="message-avatar"><Sparkles size={15}/></span><div className="typing" aria-label="Naxium is replying"><i/><i/><i/></div></div>}</div>}
+              : <div className="message-list" aria-live="polite">{messages.map(message=><div className={`message ${message.role}`} key={message.id}>{message.role==="assistant" && <span className="message-avatar"><Sparkles size={15}/></span>}<div>{answer(message)}{message.memoryReferences && <section className="memory-citations" aria-label="Sources behind this answer">{message.memoryReferences.map((r,i)=><button className="memory-citation" key={i} onClick={()=>props.onReference(r)}><strong>{r.title}</strong><small>{r.kind==="memory"?"Company memory":"Saved work"}{r.row?` · row ${r.row}`:""} · {new Date(r.updatedAt).toLocaleDateString()}</small><span>{r.excerpt}</span></button>)}</section>}{message.role==="assistant"&&message.kind!=="run"&&<button className="remember-answer text-button" onClick={()=>props.onRemember(message)}>Keep in company memory</button>}</div></div>)}{replying && <div className="message assistant"><span className="message-avatar"><Sparkles size={15}/></span><div className="typing" aria-label="Naxium is replying"><i/><i/><i/></div></div>}</div>}
             {props.blockedTask && <div className="method-repair" role="status"><p>Your established approach has not run on this input.</p><button className="secondary-button" onClick={()=>props.onPanel("workflow")}>Inspect approaches</button><button className="text-button" onClick={props.onFreshTask} disabled={busy||replying}>Run as a new task</button></div>}
             {busy && <div className="progress-card" role="status"><span className="spinner"/><div><strong>{STAGES[stage][0]}</strong><small>{STAGES[stage][1]}</small></div><button className="icon-button" aria-label="Cancel report" onClick={props.onCancel}><X size={16}/></button></div>}
             {error && <div className="error-card" role="alert"><div><strong>{ERROR_TITLES[error.kind]}</strong><p>{error.message}</p></div><button className="icon-button" aria-label="Dismiss error" onClick={props.onDismissError}><X size={16}/></button></div>}
           </div>
           {!atLatest && <button className="jump-latest secondary-button" onClick={()=>{if(body.current)body.current.scrollTop=body.current.scrollHeight;follow.current=true;setAtLatest(true);}}>Jump to latest ↓</button>}
           <div className="composer-wrap">
+            {props.memoryContext && <div className="memory-context" role="status">Reference: <strong>{props.memoryContext}</strong><button className="text-button" onClick={props.onClearMemory}>Remove reference</button></div>}
             {props.sheet && <button className="attached-file" onClick={()=>props.onPanel("data")}><FileSpreadsheet size={14}/><span>{props.sheet.name}</span><small>{props.sheet.rows.length} rows</small></button>}
             <form className="composer" onSubmit={send}><label className="sr-only" htmlFor="message">Message Naxium</label><textarea id="message" value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Tell Naxium what you want to get done…" rows={2} maxLength={2000} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();e.currentTarget.form?.requestSubmit();}}}/><div className="composer-tools"><div><button type="button" className="icon-button" aria-label="Attach spreadsheet" disabled={busy} onClick={props.onPickFile}><Paperclip size={18}/></button><span className="composer-mode">{replying?"Working on your question…":"Naxium"}</span></div><button type="submit" className="send-button" aria-label="Send message" disabled={!draft.trim()||busy||replying}><ArrowUp size={18}/></button></div></form>
             <details className="privacy-disclosure"><summary>How your data is handled</summary><p>{props.privacyNote}</p></details>
@@ -119,4 +124,9 @@ export function WorkspaceView(props: Props) {
       </aside>
     </div>
   </div>;
+}
+
+
+function LinkedText({text}:{text:string}){
+ return <>{text.split(/(https?:\/\/[^\s<>]+)/g).map((part,i)=>/^https?:\/\//.test(part)?<a key={i} href={part} target="_blank" rel="noopener noreferrer" className="chat-source-link">{part}</a>:part)}</>;
 }

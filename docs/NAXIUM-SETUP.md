@@ -103,3 +103,7 @@ The existing GitHub repository and Vercel project do not need to be renamed to l
 ## Established approaches (migration 006)
 
 Apply `db/migrations/006_learned_methods.sql` using `npm run db:migrate` with the database-owner migration URL. For the manual Neon console path, `db/manual/006_learned_methods_neon.sql` wraps the migration and history record in one transaction. Do not apply both paths. Refresh the app after successful application; Service connections should list Established approaches as Configured. No deployment secret changes are needed. Until applied, account-mode approaches are explicitly tab-only, not persistent account memory. The new 30-day method lifecycle is independent of source-workspace expiry; legacy routines are unchanged. See `docs/LEARNING-REVIEW.md` for the full behavior and review exercise.
+
+### Company memory (migration 007)
+
+Run the full `db/manual/007_company_memory_neon.sql` transaction once as owner in the production Neon database used by the app. It is also available at `/setup/007-company-memory.sql` on the preview. Confirm COMMIT, refresh, then Company memory should allow saving a permanent record. Existing saved workspaces/approaches retain their existing retention; nothing is silently promoted. Test guide: [Company memory](COMPANY-MEMORY.md). Development verification does not apply this production migration.

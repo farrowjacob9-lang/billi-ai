@@ -293,3 +293,24 @@ test("an account without method storage offers honest tab-only acceptance",async
  await expect(page.getByRole('region',{name:'Conversation workspace'}).getByText(/All rows: 980/)).toBeVisible();
  await expect(resultControls(page).getByRole('button',{name:/Established approach/})).toHaveCount(0);
 });
+
+test('company memory survives fresh sign-in, drafts from selected evidence and excludes other businesses',async({page,browser})=>{
+ const email=unique();await signUp(page,email,'Memory owner');
+ await page.getByRole('button',{name:'Company memory',exact:true}).first().click();const dialog=page.getByRole('dialog',{name:'Company memory'});
+ await dialog.getByLabel('Memory title').fill('Quote 1276 — Dave’s Electrical');await dialog.getByLabel('Reference material').fill('Install lighting. Quoted price 1200 AUD. This price needs review for a different job.');
+ await dialog.getByRole('button',{name:'Keep in company memory',exact:true}).click();await expect(dialog.getByRole('status').filter({hasText:'Kept in company memory'})).toBeVisible();await dialog.getByRole('button',{name:'Close memory'}).click();
+ const record=(await (await page.request.get('/api/memory')).json()).records[0];
+ const freshContext=await browser.newContext();const fresh=await freshContext.newPage();await fresh.goto('/');await signIn(fresh,email);await expect(fresh.getByRole('region',{name:'Conversation workspace'})).toBeVisible();
+ await fresh.getByLabel('Message Naxium').fill('Find quote 1276');await fresh.getByRole('button',{name:'Send message'}).click();const chat=fresh.getByRole('region',{name:'Conversation workspace'});await chat.getByRole('button',{name:/Quote 1276/}).click();
+ await fresh.getByRole('dialog',{name:'Company memory'}).getByRole('button',{name:'Use in chat'}).click();await fresh.getByLabel('Message Naxium').fill('Help me build a quote for John’s Electrical from this reference');await fresh.getByRole('button',{name:'Send message'}).click();
+ await expect(chat.getByText(/Review draft — based on saved company material/)).toBeVisible();await expect(chat.getByRole('region',{name:'Sources behind this answer'}).last()).toContainText('Quote 1276');
+ const otherContext=await browser.newContext();const other=await otherContext.newPage();await signUp(other,unique(),'Memory other');
+ expect((await other.request.get(`/api/memory/${record.id}`)).status()).toBe(404);
+ expect((await (await other.request.post('/api/memory/search',{data:{question:'1276'}})).json()).references).toHaveLength(0);
+ expect((await other.request.post('/api/memory/draft',{data:{id:record.id,revision:1,question:'Copy quote'}})).status()).toBe(404);
+ expect((await page.request.post(`/api/memory/${record.id}`,{data:{title:'Updated',body:'Revised scope',revision:1}})).status()).toBe(200);
+ expect((await page.request.delete(`/api/memory/${record.id}`,{data:{revision:1}})).status()).toBe(409);
+ expect((await page.request.delete(`/api/memory/${record.id}`,{data:{revision:2}})).status()).toBe(200);
+ expect((await fresh.request.post('/api/memory/draft',{data:{id:record.id,revision:1,question:'Copy quote'}})).status()).toBe(404);
+ await freshContext.close();await otherContext.close();
+});

@@ -1,3 +1,4 @@
+import {validateMemoryReferences,type MemoryReference} from "./company-memory.ts";
 import { validateSheet, validatePlan, type Sheet, type Plan } from "./sheet.ts";
 import {validateEvidence,validateTask,validateMethodRef,type InputEvidence,type TaskContext,type MethodRef} from "./methods.ts";
 export type Decision = {
@@ -15,6 +16,7 @@ export type WorkspaceMessage = {
   evidence?: InputEvidence;
   methodRef?: MethodRef;
   accepted?: "once" | "matching";
+  memoryReferences?: MemoryReference[];
   methodStorage?: "tab" | "browser" | "account";
 };
 export type Snapshot = {
@@ -56,6 +58,7 @@ export function validateSnapshot(input: unknown): Snapshot {
     )
       throw new Error("Review notes must be up to 2,000 characters.");
     return {
+      ...(m.memoryReferences?{memoryReferences:validateMemoryReferences(m.memoryReferences)}:{}),
       id: m.id,
       role: m.role,
       text: m.text,
