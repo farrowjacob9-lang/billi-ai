@@ -55,7 +55,7 @@ test('changed headings block remembered rules and offer an explicit fresh calcul
  await expect(chat(page).getByText(/sheet headings have changed/)).toBeVisible();
  await expect(chat(page).getByText(/All rows: 10/)).toHaveCount(0);
  await chat(page).getByRole('button',{name:'Run as a new task'}).click();await expect(chat(page).getByText(/All rows: 10/)).toBeVisible();
- await page.setViewportSize({width:390,height:844});await expect.poll(async()=>{const box=await page.locator('.sidebar').boundingBox();return box!.x+box!.width;}).toBeLessThanOrEqual(1);await page.screenshot({path:test.info().outputPath('learned-approach-mobile.png')});
+ await page.setViewportSize({width:390,height:844});await expect.poll(async()=>{const box=await page.locator('.sidebar').boundingBox();return box!.x+box!.width;}).toBeLessThanOrEqual(1);await expect.poll(()=>page.locator('.conversation-body').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);await page.screenshot({path:test.info().outputPath('learned-approach-mobile.png')});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
 
