@@ -2,6 +2,10 @@
 
 Consolidated 23 October 2026. Read this first when continuing product strategy or implementation. It records the latest user clarifications and supersedes conflicting recommendations in earlier research/design documents. Proposed architecture and next steps below are not implemented capabilities.
 
+## Implementation update — 24 October 2026
+
+The first acceptance/correction/reuse slice is now implemented. Read [LEARNING-REVIEW.md](LEARNING-REVIEW.md) and the newest STATE checkpoint for the current review point, exact limitations and migration 006 setup. The implementation section below records the pre-build baseline; its “not yet supplied” list is historical where superseded by that update. The product-direction distinctions remain authoritative.
+
 ## 1. The agreed product direction
 
 Naxium helps owners and decision makers get practical work done, while turning their accepted way of working into a repeatable business process.

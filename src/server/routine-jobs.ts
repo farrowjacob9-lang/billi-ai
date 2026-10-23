@@ -1,3 +1,4 @@
+import {methodsReady} from "./methods.ts";
 import { runWorkflow } from "../lib/workflow.ts";
 import { withTenant, query } from "./db.ts";
 import type { Snapshot } from "../lib/workspace.ts";
@@ -70,6 +71,7 @@ export async function runJob(businessId: string, id: string) {
   return { status };
 }
 export async function dueJobs() {
+  const expireMethods=await methodsReady();
   const jobs: { businessId: string; id: string }[] = [];
   let cursor = "00000000-0000-0000-0000-000000000000";
   for (;;) {
@@ -83,6 +85,7 @@ export async function dueJobs() {
     for (const b of businesses) {
       if (jobs.length >= 200) return jobs;
       await withTenant(b.id, async (c) => {
+        if(expireMethods)await c.query("DELETE FROM learned_methods WHERE business_id=$1 AND expires_at<=now()",[b.id]);
         await c.query(
           "DELETE FROM workspaces WHERE business_id=$1 AND expires_at<=now()",
           [b.id],

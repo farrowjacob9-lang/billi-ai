@@ -1,0 +1,4 @@
+Amount,Status,Category,Description
+200,Posted,Sales,New completed transaction
+700,Pending,Sales,New pending transaction
+-50,Posted,Travel,New expense

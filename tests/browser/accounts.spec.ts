@@ -23,13 +23,13 @@ async function signUp(page: Page, email: string, business: string, { verify = tr
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Create workspace" }).click();
-  await expect(page.getByRole("heading", { name: "Work with your data" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Conversation workspace" })).toBeVisible();
   if (!verify) return;
   await page.goto(await emailedLink(email, "/verify-email"));
   await page.getByRole("button", { name: "Confirm my email" }).click();
   await expect(page.getByRole("heading", { name: "Email confirmed." })).toBeVisible();
   await page.getByRole("link", { name: "Go to Naxium" }).click();
-  await expect(page.getByRole("heading", { name: "Work with your data" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Conversation workspace" })).toBeVisible();
 }
 
 async function signIn(page: Page, email: string, password = PASSWORD) {
@@ -55,7 +55,7 @@ test("signed-out visitors see only the sign-in screen and the API refuses them",
 test("a business's reports and routines persist on the server and stay private to it", async ({ page, browser }) => {
   const a = unique(), b = unique();
   await signUp(page, a, "Harbour Studio");
-  await expect(page.getByText("Reports are saved to Harbour Studio only.", { exact: false })).toBeVisible();
+  await expect(page.locator(".workspace-picker")).toContainText("Harbour Studio");
   await page.getByRole("button", { name: "Try a sample report" }).click();
   await expect(page.getByText("Written by Claude · figures verified")).toBeVisible();
   await page.getByRole("button", { name: "Save routine", exact: true }).click();
@@ -146,7 +146,7 @@ test("a forgotten password is reset from an emailed link, which also lifts a loc
   const elsewhere = await other.newPage();
   await elsewhere.goto("/");
   await signIn(elsewhere, email);
-  await expect(elsewhere.getByRole("heading", { name: "Work with your data" })).toBeVisible();
+  await expect(elsewhere.getByRole("region", { name: "Conversation workspace" })).toBeVisible();
   await signOut(page);
 
   for (let i = 0; i < 6; i++) { await signIn(page, email, "not my password"); await expect(page.locator(".error-card[role=alert]")).toBeVisible(); }
@@ -161,7 +161,7 @@ test("a forgotten password is reset from an emailed link, which also lifts a loc
   await page.getByLabel("New password", { exact: true }).fill("a brand new passphrase");
   await page.getByLabel("Confirm new password").fill("a brand new passphrase");
   await page.getByRole("button", { name: "Save and sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Work with your data" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Conversation workspace" })).toBeVisible();
 
   await page.goto(link);
   await page.getByLabel("New password", { exact: true }).fill("yet another passphrase");
@@ -172,7 +172,7 @@ test("a forgotten password is reset from an emailed link, which also lifts a loc
   await elsewhere.reload();
   await expect(elsewhere.getByRole("heading", { name: "Welcome back." })).toBeVisible();
   await signIn(elsewhere, email, "a brand new passphrase");
-  await expect(elsewhere.getByRole("heading", { name: "Work with your data" })).toBeVisible();
+  await expect(elsewhere.getByRole("region", { name: "Conversation workspace" })).toBeVisible();
   await other.close();
 });
 
@@ -196,7 +196,7 @@ test("settings change the password, link the legal pages, and delete the account
   const elsewhere = await other.newPage();
   await elsewhere.goto("/");
   await signIn(elsewhere, email);
-  await expect(elsewhere.getByRole("heading", { name: "Work with your data" })).toBeVisible();
+  await expect(elsewhere.getByRole("region", { name: "Conversation workspace" })).toBeVisible();
 
   await page.getByRole("button", { name: "Workspace settings" }).click();
   await expect(page.getByRole("dialog").getByRole("link", { name: "Privacy Policy" })).toHaveAttribute("href", "/privacy");
@@ -233,4 +233,63 @@ test("sign-up links the draft legal pages", async ({ page }) => {
     await expect(page.getByRole("heading", { name: heading })).toBeVisible();
     await expect(page.getByRole("note")).toContainText("Draft for review");
   }
+});
+
+
+const LEARNING_CSV="Amount,Status,Category\n100,Posted,Sales\n900,Pending,Sales\n-20,Posted,Travel";
+const resultControls=(page:Page)=>page.getByRole("region",{name:"Conversation workspace"}).getByRole("region",{name:"Refine this result"}).last();
+async function methodInput(page:Page,data=LEARNING_CSV) {
+ await page.getByLabel("Upload spreadsheet").setInputFiles({name:"input.csv",mimeType:"text/csv",buffer:Buffer.from(data)});
+ await page.getByRole("button",{name:"Back to conversation"}).click();
+ await page.getByLabel("Message Naxium").fill("Total Amount");await page.getByRole("button",{name:"Send message"}).click();
+ await expect(resultControls(page)).toBeVisible();
+}
+async function methodCorrection(page:Page,text:string) {
+ await resultControls(page).getByRole("button",{name:"Adjust result",exact:true}).click();
+ await resultControls(page).getByLabel("What should change?").fill(text);
+ await resultControls(page).getByRole("button",{name:"Update result"}).click();
+ await expect(resultControls(page).getByText(`Adjustment: ${text}`,{exact:true})).toBeVisible();
+}
+test("account approaches survive a new browser and cannot be read by another business",async({page,browser})=>{
+ page.on('dialog',d=>d.accept());const email=unique();await signUp(page,email,"Learning A");await methodInput(page);
+ await methodCorrection(page,"Only Posted");
+ await expect(resultControls(page).getByText(/your business account for 30 days/)).toBeVisible();
+ await resultControls(page).getByRole("button",{name:"That’s right"}).click();
+ await expect(resultControls(page).getByRole("status")).toContainText("matching requests");
+ const saved=await page.request.get('/api/methods');const method=(await saved.json()).methods[0];expect(method.revision).toBe(1);
+ expect((await (await page.request.get('/api/workspaces')).json()).workspaces).toHaveLength(0);
+ const secondContext=await browser.newContext();const second=await secondContext.newPage();await second.goto('/');await signIn(second,email);
+ await expect(second.getByRole('region',{name:'Conversation workspace'})).toBeVisible();
+ await methodInput(second,"Amount,Status,Category\n200,Posted,Sales\n700,Pending,Sales\n-50,Posted,Travel");
+ await expect(second.getByRole('region',{name:'Conversation workspace'}).getByText(/All rows: 150/)).toBeVisible();
+ await expect(resultControls(second).getByRole('status')).toContainText('Applied your accepted approach');
+ await expect(resultControls(second).getByRole('button',{name:'That’s right'})).toHaveCount(0);
+ const otherContext=await browser.newContext();const other=await otherContext.newPage();await signUp(other,unique(),"Learning B");
+ expect((await (await other.request.get('/api/methods')).json()).methods).toHaveLength(0);
+ expect((await other.request.get(`/api/methods/${method.id}`)).status()).toBe(404);
+ expect((await other.request.post(`/api/methods/${method.id}/run`,{data:{revision:1,sheet:{name:'x',columns:['Amount','Status','Category'],rows:[[1,'Posted','Sales']]}}})).status()).toBe(409);
+ await secondContext.close();await otherContext.close();
+});
+
+test("account approach revisions reject a second tab's stale acceptance",async({page,context})=>{
+ page.on('dialog',d=>d.accept());await signUp(page,unique(),"Concurrent learning");await methodInput(page);
+ await resultControls(page).getByRole('button',{name:'That’s right'}).click();await expect(resultControls(page).getByRole('status')).toContainText('matching requests');
+ const second=await context.newPage();second.on('dialog',d=>d.accept());await second.goto('/');await methodInput(second);
+ await methodCorrection(second,'Only Pending');
+ await methodCorrection(page,'Only Posted');await resultControls(page).getByRole('button',{name:'That’s right'}).click();
+ await expect(resultControls(page).getByRole('button',{name:'Established approach · version 2'})).toBeVisible();
+ await resultControls(second).getByRole('button',{name:'That’s right'}).click();
+ await expect(resultControls(second).getByRole('alert')).toContainText('changed in another tab');
+ expect((await (await page.request.get('/api/methods')).json()).methods[0].revision).toBe(2);
+ await second.close();
+});
+
+test("an account without method storage offers honest tab-only acceptance",async({page})=>{
+ page.on('dialog',d=>d.accept());await page.route('**/api/methods',async route=>{if(route.request().method()==='GET')await route.fulfill({json:{ready:false,methods:[]}});else await route.continue();});
+ await signUp(page,unique(),"Tab learning");await methodInput(page);await methodCorrection(page,'Only Posted');
+ await expect(resultControls(page).getByText(/this tab until this tab is closed or refreshed/)).toBeVisible();
+ await resultControls(page).getByRole('button',{name:'That’s right'}).click();await expect(resultControls(page).getByRole('status')).toContainText('matching');
+ await page.reload();await methodInput(page);
+ await expect(page.getByRole('region',{name:'Conversation workspace'}).getByText(/All rows: 980/)).toBeVisible();
+ await expect(resultControls(page).getByRole('button',{name:/Established approach/})).toHaveCount(0);
 });

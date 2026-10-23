@@ -13,9 +13,10 @@ export default function Privacy() {
     <ul>
       <li><strong>Account details:</strong> your email address, your business name, and your password, which we store only as a one-way scrypt hash.</li>
       <li><strong>Reports you create:</strong> the calculated report for each weekly CSV you run (file name, dates, transaction count, totals by day and by category, and the written takeaway). We do <em>not</em> store the CSV file or its individual transactions; the server reads the file, calculates the report and discards it. Separately, choosing Save workspace stores the parsed worksheet cells, file/sheet names, conversation and review decisions for your business.</li>
+      <li><strong>Established approaches:</strong> accepting a result for matching requests retains its request, headings, calculation rules, corrections, accepted versions and input fingerprints separately from the spreadsheet workspace. Filter values and correction text may include personal information. The approach does not retain worksheet rows; its rules may retain selected filter values.</li>
       <li><strong>Routines:</strong> the name and report format you save, or a saved spreadsheet query and its frequency. Background jobs receive workspace identifiers rather than spreadsheet contents.</li>
       <li><strong>Security and usage records:</strong> a sign-in cookie, records of account actions (for example “report deleted”), sign-in attempts against your email address, the number of AI requests per day, and your IP address in short-lived rate-limit counters.</li>
-      <li><strong>Questions you ask the assistant</strong>, which are sent to our AI provider to answer them (see below). Conversations are stored only when you explicitly save a workspace.</li>
+      <li><strong>Questions you ask the assistant</strong>, which are sent to our AI provider to answer them (see below). Full conversations are stored when you explicitly save a workspace. Accepting a result for matching requests separately retains its task question and any corrections as part of that approach.</li>
     </ul>
 
     <h2>Why we use it</h2>
@@ -26,7 +27,7 @@ export default function Privacy() {
     <ul>
       <li><strong>Vercel</strong> hosts the application. Requests may be processed outside Australia, including in the United States.</li>
       <li><strong>Neon</strong> hosts our database in Sydney, Australia (AWS ap-southeast-2).</li>
-      <li><strong>Anthropic</strong> provides the Claude AI model. When the assistant is on, it receives the calculated totals of a report (including your category names) and your questions. For spreadsheet questions it receives column headings and user questions, not spreadsheet rows. Text you quote in your questions is also sent. Anthropic processes this in the United States.</li>
+      <li><strong>Anthropic</strong> provides the Claude AI model. When the assistant is on, it receives the calculated totals of a report (including your category names) and your questions. For spreadsheet questions and adjustments it receives column headings, user questions and the calculation rules being adjusted, not spreadsheet rows. Rules may include filter values you selected. Text you quote in your questions is also sent. Anthropic processes this in the United States.</li>
       <li><strong>Inngest</strong> runs configured background routines, receiving job and business identifiers, not the worksheet cells.</li>
       <li><strong>Resend</strong> sends our account emails and receives your email address to do so. It processes this in the United States.</li>
     </ul>
@@ -37,8 +38,10 @@ export default function Privacy() {
 
     <p>Saved spreadsheet workspaces expire 30 days after saving. Expired workspaces are inaccessible and removed by the configured cleanup worker or when saved work is listed. Deleting a workspace also deletes its routines and jobs. AI call activity includes model, operation, token counts, duration and outcome; it contains no prompt or row content.</p>
 
+    <p>Established approaches expire 30 days after acceptance of a version or an explicit restore; running them does not extend expiry. They are independent of source-workspace deletion. Up to 20 accepted versions and the latest 50 execution records (version, input fingerprint, file name and row counts, not result text or source cells) are retained while the approach remains active. Expired approaches are inaccessible and deleted when approaches are listed or by the configured cleanup worker. Forgetting an approach deletes its rules and usage history, but does not rewrite historical answers already saved in a workspace. Before account storage is enabled, the interface explicitly offers tab-only approaches; those are lost on refresh.</p>
+
     <h2>Cookies</h2>
-    <p>We use one essential cookie to keep you signed in. We don’t use advertising or analytics cookies. Without an account, the browser-only version keeps your history in your browser’s local storage, on your device. Explicitly saved spreadsheet workspaces use IndexedDB in browser-only mode and are removed on expiry when saved work is loaded.</p>
+    <p>We use one essential cookie to keep you signed in. We don’t use advertising or analytics cookies. Without an account, the browser-only version keeps your history in your browser’s local storage, on your device. Explicitly saved spreadsheet workspaces use IndexedDB in browser-only mode and are removed on expiry when saved work is loaded. Browser-only established approaches use local storage with the disclosed 30-day lifetime; associated run metadata is removed when expired approaches are loaded. They can be inspected, restored or forgotten in Workflows.</p>
 
     <h2>Security</h2>
     <p>Traffic is encrypted in transit. Each business’s data is separated in the database by row-level security as well as in our code. Passwords are hashed, and session and email-link tokens are stored only as hashes. No system is perfectly secure; if a data breach is likely to cause you serious harm, we will notify you and the Office of the Australian Information Commissioner as the law requires.</p>

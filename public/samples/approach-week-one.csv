@@ -1,0 +1,4 @@
+Amount,Status,Category,Description
+100,Posted,Sales,Example completed transaction
+900,Pending,Sales,Example pending transaction
+-20,Posted,Travel,Example expense

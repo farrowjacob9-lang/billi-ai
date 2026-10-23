@@ -22,6 +22,7 @@ test('conversation fills the viewport and the workbench closes without losing th
  await expect(page.locator('#pane-results').getByText(/All rows: 95/)).toBeVisible();
  await page.screenshot({path:test.info().outputPath('chat-workbench-desktop.png')});
  await page.getByRole('tab',{name:'Workflow',exact:true}).click();
+ if(await page.locator('#pane-workflow > details').getAttribute('open')===null)await page.getByText('Advanced calculation workflows',{exact:true}).click();
  const builder=page.getByRole('region',{name:'Workflow builder'});
  await builder.getByText(/Build from successful answers/).click();
  await builder.getByLabel('Workflow name',{exact:true}).fill('Keep this draft');
@@ -80,6 +81,7 @@ test('chat and workflow library run the same approved method on the selected inp
  const composer=page.getByLabel('Message Naxium');
  await composer.fill('Total Amount');await page.getByRole('button',{name:'Send message'}).click();
  await page.getByRole('tab',{name:'Workflow',exact:true}).click();
+ if(await page.locator('#pane-workflow > details').getAttribute('open')===null)await page.getByText('Advanced calculation workflows',{exact:true}).click();
  const builder=page.getByRole('region',{name:'Workflow builder'});
  await builder.getByText(/Build from successful answers/).click();
  await builder.getByLabel('Workflow name',{exact:true}).fill('My review');

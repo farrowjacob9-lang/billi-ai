@@ -11,6 +11,11 @@ function reply(body: Body): string {
   const last = String(body.messages?.at(-1)?.content ?? "");
   if (body.system?.includes("Translate a spreadsheet question")) {
     const request = JSON.parse(last);
+    if(request.revision) {
+      if(/only posted/i.test(request.revision.correction))return JSON.stringify({clarification:"Posted appears in more than one column. Which column should determine inclusion?"});
+      if(/invent/i.test(request.revision.correction))return JSON.stringify({operation:"sum",column:"Imaginary"});
+      return JSON.stringify({clarification:"Which column and value should change?"});
+    }
     if (/how much did we spend/i.test(request.question)) return JSON.stringify({clarification:"Which amount column and sign convention should I use, and should pending transactions be included?"});
     if (/monthly/i.test(request.question)) return JSON.stringify({operation:"sum",column:"Amount",groupBy:"Date",period:"month"});
     if (/invent/i.test(request.question)) return JSON.stringify({ operation: "sum", column: "Imaginary" });

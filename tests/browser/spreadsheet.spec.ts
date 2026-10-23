@@ -145,6 +145,7 @@ test('approved workflow remembers steps and reuses them on a fresh file with sch
   await expect(page.getByRole('button',{name:'Send message'})).toBeDisabled();
  }
  await page.getByRole('tab',{name:'Workflow',exact:true}).click();
+ if(await page.locator('#pane-workflow > details').getAttribute('open')===null)await page.getByText('Advanced calculation workflows',{exact:true}).click();
  const builder=page.getByRole('region',{name:'Workflow builder'});
  await builder.getByText(/Build from successful answers/).click();
  await builder.getByLabel('Workflow name',{exact:true}).fill('Expense checks');
@@ -154,6 +155,7 @@ test('approved workflow remembers steps and reuses them on a fresh file with sch
  await expect(page.getByText(/Workflow remembered/)).toBeVisible();
  await upload('new.csv','Category,Amount\nTravel,-50\nSoftware,-5\nFees,-1');
  await page.getByRole('tab',{name:'Workflow',exact:true}).click();
+ if(await page.locator('#pane-workflow > details').getAttribute('open')===null)await page.getByText('Advanced calculation workflows',{exact:true}).click();
  await builder.getByLabel('Saved workflow',{exact:true}).selectOption({label:'Expense checks'});
  await builder.getByRole('button',{name:'Run workflow on current sheet'}).click();
  await expect(builder.getByRole('status')).toContainText('Completed 2 steps');
@@ -164,6 +166,7 @@ test('approved workflow remembers steps and reuses them on a fresh file with sch
  await expect(page.getByText('Inspecting answer source rows.')).toBeVisible();
  await upload('wrong.csv','Other\n1');
  await page.getByRole('tab',{name:'Workflow',exact:true}).click();
+ if(await page.locator('#pane-workflow > details').getAttribute('open')===null)await page.getByText('Advanced calculation workflows',{exact:true}).click();
  await expect(builder.getByRole('alert')).toContainText('Missing columns: Amount');
  await expect(builder.getByRole('button',{name:'Run workflow on current sheet'})).toBeDisabled();
  await builder.getByRole('button',{name:'Forget workflow'}).click();

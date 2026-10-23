@@ -4,6 +4,16 @@ Branch: `spreadsheet-questions`. Draft PR: https://github.com/farrowjacob9-lang/
 
 Preview: https://billi-ai-git-spreadsheet-questions-naxium-langs-projects.vercel.app/
 
+## Learning loop implementation — 24 Oct 2026
+
+The next-stage review is documented in [LEARNING-REVIEW.md](LEARNING-REVIEW.md). Spreadsheet answers now support natural corrections, visible one-off versus matching acceptance, automatic reuse of an accepted approach on matching requests/fresh data, version inspection/restore/forget and input-fingerprint evidence. Reused methods do not ask for another approval. Explicit “this time” corrections default to one-off acceptance. Recognition remains conservative: normalized request wording and the same headings, not general semantic matching.
+
+New migration `006_learned_methods.sql` stores approaches independently of source workspaces under an explicit 30-day lifetime, with tenant isolation, optimistic versions, bounded history and execution metadata. Ready-to-run Neon transaction: `db/manual/006_learned_methods_neon.sql`. Production migration has not been applied from this environment. Until it is applied, signed-in preview users get explicitly labeled tab-only approaches; local prototype mode persists them in browser storage. Full-cell snapshots still require Save workspace. Legacy manual workflow controls are under Advanced.
+
+Verification: production build/typecheck and the 25-case offline execution evaluation passed; all 62 unit/database tests passed against disposable Postgres with no skips; all 45 browser cases passed, including 12 authenticated account journeys. Fake model/email providers were used, not production customer data.
+
+The agreed direction remains broader than this slice: general task discovery, multi-step methods, richer business context, entity reconciliation, external actions and measured customer value are not yet implemented. Read the review guide before expanding scope.
+
 ## Latest product synthesis — read before planning more features
 
 Read [NEXT-UP.md](NEXT-UP.md) for the consolidated user-approved direction, corrections to earlier examples, competitive findings and next-session brief. The target is useful work whose accepted method carries forward to the next matching request without a separate “remember/create workflow” instruction. Learning should emerge through use, not a guided interview or manual workflow builder. Sales/quoting is a possible test domain, not a committed market; spreadsheet creation/editing was illustrative, not an approved implementation request. The research in [NAXIUM-COMPETITIVE-STRATEGY.md](NAXIUM-COMPETITIVE-STRATEGY.md) supplies evidence and hypotheses; later user clarifications in NEXT-UP take precedence over its proposed sales-review focus. This synthesis is documentation only, not new product behavior. Application checkpoint `ae06b12` is deployed and CI passed, including the portable screenshot-path fix.

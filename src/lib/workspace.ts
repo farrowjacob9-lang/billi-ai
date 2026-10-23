@@ -1,4 +1,5 @@
 import { validateSheet, validatePlan, type Sheet, type Plan } from "./sheet.ts";
+import {validateEvidence,validateTask,validateMethodRef,type InputEvidence,type TaskContext,type MethodRef} from "./methods.ts";
 export type Decision = {
   action: "approved" | "changed" | "excluded";
   note: string;
@@ -10,6 +11,11 @@ export type WorkspaceMessage = {
   kind?: "run";
   plan?: Plan;
   decision?: Decision;
+  task?: TaskContext;
+  evidence?: InputEvidence;
+  methodRef?: MethodRef;
+  accepted?: "once" | "matching";
+  methodStorage?: "tab" | "browser" | "account";
 };
 export type Snapshot = {
   sheets: Sheet[];
@@ -56,6 +62,11 @@ export function validateSnapshot(input: unknown): Snapshot {
       ...(m.kind === "run" ? { kind: "run" as const } : {}),
       ...(m.plan ? { plan: validatePlan(m.plan, sheets[s.sheetIndex]) } : {}),
       ...(m.decision ? { decision: m.decision } : {}),
+      ...(m.task ? {task:validateTask(m.task)} : {}),
+      ...(m.evidence ? {evidence:validateEvidence(m.evidence)} : {}),
+      ...(m.methodRef ? {methodRef:validateMethodRef(m.methodRef)} : {}),
+      ...(m.accepted && ["once","matching"].includes(m.accepted) ? {accepted:m.accepted} : {}),
+      ...(m.methodStorage && ["tab","browser","account"].includes(m.methodStorage) ? {methodStorage:m.methodStorage} : {}),
     };
   });
   let sheetMessages: Record<string, WorkspaceMessage[]> | undefined;

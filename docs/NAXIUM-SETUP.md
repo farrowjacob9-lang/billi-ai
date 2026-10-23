@@ -98,3 +98,8 @@ Preview protection can prevent Inngest reaching a preview URL. Prefer a dedicate
 - When testing is finished, replace the test account password you put in this chat.
 
 The existing GitHub repository and Vercel project do not need to be renamed to launch as Naxium. Optional internal renaming can happen later, after deployment and recovery are stable.
+
+
+## Established approaches (migration 006)
+
+Apply `db/migrations/006_learned_methods.sql` using `npm run db:migrate` with the database-owner migration URL. For the manual Neon console path, `db/manual/006_learned_methods_neon.sql` wraps the migration and history record in one transaction. Do not apply both paths. Refresh the app after successful application; Service connections should list Established approaches as Configured. No deployment secret changes are needed. Until applied, account-mode approaches are explicitly tab-only, not persistent account memory. The new 30-day method lifecycle is independent of source-workspace expiry; legacy routines are unchanged. See `docs/LEARNING-REVIEW.md` for the full behavior and review exercise.

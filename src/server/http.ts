@@ -4,11 +4,8 @@ import { databaseConfigured } from "./db.ts";
 import { emailConfigured } from "./email.ts";
 import { ipBucket } from "./ip.ts";
 
-export class HttpError extends Error {
-  readonly status: number;
-  readonly code: string;
-  constructor(status: number, code: string, message: string) { super(message); this.status = status; this.code = code; }
-}
+import {HttpError} from "./errors.ts";
+export {HttpError};
 
 export const fail = (status: number, code: string, message: string) => Response.json({ error: { code, message } }, { status, headers: { "cache-control": "no-store" } });
 export const ok = (body: unknown, status = 200) => Response.json(body, { status, headers: { "cache-control": "no-store" } });

@@ -134,3 +134,39 @@
  .connected-library .tools-row { flex-direction:column; }
  .connected-library .page-heading { flex-direction:column; align-items:stretch; }
 }
+
+/* Learning is attached to useful work, rather than a separate setup questionnaire. */
+.answer-learning { border-top:1px solid var(--border); margin-top:14px; padding-top:12px; font-size:12px; line-height:1.6; }
+.learning-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin:8px 0; }
+.text-button,.method-reference { background:transparent; color:var(--green); padding:5px 2px; font-size:12px; text-decoration:underline; text-underline-offset:3px; }
+.learning-actions .secondary-button { padding:7px 10px; font-size:12px; }
+.learning-scope { display:flex; align-items:center; flex-wrap:wrap; gap:8px; color:var(--muted); margin:8px 0; }
+.learning-scope select { width:auto; max-width:100%; background:var(--surface); color:var(--ink); border:1px solid var(--border); border-radius:6px; padding:5px 8px; font-size:12px; }
+.learning-disclosure,.adjustment-note { color:var(--muted); font-size:11px; line-height:1.6; }
+.correction-form { border:1px solid var(--border); border-radius:10px; padding:12px; margin-top:12px; background:var(--surface); }
+.correction-form label { display:block; }
+.correction-form input { display:block; width:100%; background:var(--paper); color:var(--ink); padding:10px; border:1px solid var(--border); border-radius:7px; margin:6px 0; }
+.correction-form p,.accepted-rules p { margin:7px 0; font-size:11px; color:var(--muted); }
+.correction-form > div { display:flex; gap:12px; }
+.learning-error { color:#a54d2d; margin:8px 0; }
+.accepted-rules { margin-top:9px; }
+.accepted-rules summary { cursor:pointer; color:var(--muted); font-size:11px; }
+.methods-library { padding:20px 0; font-size:13px; line-height:1.65; }
+.methods-library > h2 { font-size:18px; margin-bottom:8px; }
+.methods-library > h2 small { color:var(--muted); font-weight:400; margin-left:7px; }
+.methods-library > p { color:var(--muted); margin:10px 0; }
+.method-list { display:grid; gap:10px; margin:16px 0; }
+.method-card { padding:14px; border:1px solid var(--border); border-radius:10px; background:var(--surface); color:var(--ink); text-align:left; min-width:0; overflow-wrap:anywhere; }
+.method-card[aria-pressed=true] { outline:2px solid var(--green); outline-offset:1px; }
+.method-card strong,.method-card span,.method-card small { display:block; }
+.method-card span,.method-card small { color:var(--muted); margin-top:5px; font-size:11px; }
+.method-detail { padding:16px; background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow-wrap:anywhere; }
+.method-detail p { margin:10px 0; }
+.method-detail details { margin-top:18px; }
+.method-detail summary { cursor:pointer; font-weight:600; }
+.method-version { padding:14px 0; border-bottom:1px solid var(--border); }
+.method-version small { display:block; color:var(--muted); margin-bottom:8px; }
+.method-repair { margin:16px 0; padding:14px; border:1px solid var(--border); border-radius:9px; font-size:13px; }
+.method-repair p { margin-bottom:8px; }
+.connected-library > .methods-library { margin-bottom:24px; padding:22px; background:var(--surface); border:1px solid var(--border); border-radius:12px; }
+@media(max-width:760px) { .correction-form input { font-size:16px; } .methods-library,.connected-library > .methods-library { padding:14px; } }

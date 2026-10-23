@@ -7,6 +7,9 @@ import { HistoryView, RoutinesView } from "@/components/ListViews";
 import { Sidebar } from "@/components/Sidebar";
 import { Toast } from "@/components/ui";
 import {parseWorkHash,writeWorkLocation,type WorkReference,type WorkLocation} from "@/lib/work-navigation";
+import { MethodsLibrary } from "@/components/MethodsLibrary";
+import { MethodStore } from "@/lib/method-store";
+import { canonicalPlan, inputEvidence, recognizeMethod, simpleCorrection, oneOffIntent, type LearnedMethod, type MethodRef, type TaskContext } from "@/lib/methods";
 import { WorkspaceTools } from "@/components/WorkspaceTools";
 import { WorkspaceView } from "@/components/WorkspaceView";
 import { compactForModel } from "@/lib/ai/verify";
@@ -18,7 +21,7 @@ import { AuthScreen } from "@/components/AuthScreen";
 import { api, ApiError, cloudStore, localStore, SIGNED_OUT_EVENT, type Capabilities } from "@/lib/store";
 import type { Message, Modal, Routine, UiError, View } from "@/lib/types";
 import { readSpreadsheet } from "@/lib/read-workbook";
-import { executePlan, simplePlan, type Sheet } from "@/lib/sheet";
+import { executePlan, evaluatePlan, simplePlan, type Sheet, type Plan } from "@/lib/sheet";
 
 const pause = () => new Promise(resolve => setTimeout(resolve, 180));
 
@@ -51,6 +54,7 @@ export function App({ caps }: { caps: Capabilities }) {
   const [toolsMount,setToolsMount] = useState<HTMLDivElement|null>(null);
   const [workflowMount,setWorkflowMount] = useState<HTMLDivElement|null>(null);
   const [workflowRequest,setWorkflowRequest] = useState<{name:string;token:number}|null>(null);
+  const [manualWorkflowsOpen,setManualWorkflowsOpen]=useState(false);
   const [salesDraft,setSalesDraft] = useState(false);
   const [unsaved, setUnsaved] = useState(false);
   const [view, setView] = useState<View>("workspace");
@@ -86,6 +90,21 @@ export function App({ caps }: { caps: Capabilities }) {
   const signedOut = caps.mode === "cloud" && (!caps.user || sessionEnded);
   const store = useMemo(() => caps.mode === "cloud" ? cloudStore() : localStore(caps), [caps]);
   const copy = modeCopy(caps);
+  const methodStore=useMemo(()=>new MethodStore(caps.mode==="cloud"),[caps.mode,caps.user?.email]);
+  const [methods,setMethods]=useState<LearnedMethod[]>([]);
+  const [methodError,setMethodError]=useState("");
+  const [methodBusy,setMethodBusy]=useState(false);
+  const [methodFocus,setMethodFocus]=useState<{id:string;token:number}|null>(null);
+  const [blockedTask,setBlockedTask]=useState("");
+  const methodLoad=useRef(0);
+  const methodAction=useRef(false);
+  async function loadMethods() {
+    const request=++methodLoad.current;
+    try {const result=await methodStore.list();if(methodLoad.current===request){setMethods(result);setMethodError("");}return result;}
+    catch(e){if(methodLoad.current===request)setMethodError((e as Error).message);throw e;}
+  }
+  useEffect(()=>{if(signedOut)return;void loadMethods().catch(()=>{});const changed=()=>void loadMethods().catch(()=>{});window.addEventListener("storage",changed);return()=>window.removeEventListener("storage",changed);},[methodStore,signedOut]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(()=>setBlockedTask(""),[sheet]);
 
   useEffect(() => {
     if (signedOut) return;
@@ -173,22 +192,66 @@ export function App({ caps }: { caps: Capabilities }) {
       setComposerDraft("");threadPosition.current=null;activeWorkRef.current=null;activeReportRef.current=null;setWorkIdentity(null);writeWorkLocation({view:"workspace"});
       sheetMessages.current = {}; setWorkspaceSession(n=>n+1); setSheets(loaded); setSheetIndex(0); setReport(null); setMessages([]);
       say("user", `Work with ${file.name}.`, "run");
-      say("assistant", `Loaded ${loaded[0].rows.length} rows and ${loaded[0].columns.length} columns. Ask a question, or tell me the workflow you want to build.`, "run");
+      say("assistant", `Loaded ${loaded[0].rows.length} rows and ${loaded[0].columns.length} columns. Ask a question, or tell me what you want to get done. Adjust a useful result, then accept it to establish your approach.`, "run");
     } catch (e) { if (current === operation.current) setError(uiError(e)); }
     finally { if (current === operation.current) setBusy(false); }
   }
 
-  async function send(text: string) {
+  function inspectMethod(ref:MethodRef) {setMethodFocus({id:ref.id,token:Date.now()+Math.random()});setPanel("workflow");}
+  async function checkedAnswer(message:Message) {
+    const source=activeSheetRef.current;
+    if(!source || !message.plan || !message.task || !message.evidence || evaluatePlan(source,message.plan).text!==message.text || (await inputEvidence(source,message.plan)).fingerprint!==message.evidence.fingerprint)throw new Error("This answer belongs to different or changed input. Run the request on the current sheet before adjusting or accepting it.");
+    return source;
+  }
+  async function acceptAnswer(message:Message,scope:"once"|"matching"):Promise<string|null> {
+    if(methodAction.current)return "Another approach change is in progress.";
+    methodAction.current=true;setMethodBusy(true);const asked=conversation.current;const intendedStorage=methodStore.storage();
+    try {
+      const source=await checkedAnswer(message);
+      if(asked!==conversation.current || activeSheetRef.current!==source)throw new Error("The active work changed. Accept the result in its original workspace.");
+      if(scope==="once") {setMessages(old=>old.map(m=>m.id===message.id?{...m,accepted:"once",decision:{action:"approved",note:"Accepted for this result only."}}:m));return null;}
+      let method:LearnedMethod;
+      if(message.methodRef && !message.task!.correction) {
+        const found=(await loadMethods()).find(m=>m.id===message.methodRef!.id);
+        if(!found || found.revision!==message.methodRef.version)throw new Error("This approach changed or expired. Run the request again.");
+        method=found;
+      } else method=await methodStore.accept(message.task!,message.plan!,source,intendedStorage);
+      await loadMethods();
+      if(asked===conversation.current && source===activeSheetRef.current)setMessages(old=>old.map(m=>m.id===message.id?{...m,accepted:"matching",methodRef:{id:method.id,version:method.revision},methodStorage:methodStore.storage(method.id),decision:{action:"approved",note:"Accepted for matching requests with the same headings."}}:m));
+      setToast(methodStore.storage(method.id)==="tab"?"Accepted for matching requests in this tab only. Account memory needs setup; refreshing this tab forgets the approach.":"Approach accepted for matching requests for 30 days. The original spreadsheet is not retained with it.");return null;
+    }catch(e){return (e as Error).message;}finally{methodAction.current=false;setMethodBusy(false);}
+  }
+  async function correctAnswer(message:Message,correction:string):Promise<string|null> {
+    if(methodAction.current)return "Another approach change is in progress.";
+    methodAction.current=true;setMethodBusy(true);const asked=conversation.current;
+    try {
+      const source=await checkedAnswer(message);
+      let plan=simpleCorrection(correction,message.plan!,source);
+      if(!plan) {
+        if(!caps.ai)return 'Try a precise change such as “Only Posted”, “Exclude Travel”, or “Include all rows”. Other adjustments need an AI connection.';
+        const r=await api<{reply:string;plan?:Plan}>("/api/sheet-question",{method:"POST",body:JSON.stringify({sheet:source,question:message.task!.question,basePlan:message.plan,correction})});
+        if(!r.plan)return r.reply;
+        plan=canonicalPlan(r.plan,source);
+      }
+      const text=executePlan(source,plan),evidence=await inputEvidence(source,plan);
+      if(asked!==conversation.current || source!==activeSheetRef.current)throw new Error("The active work changed. No correction was added to the new conversation.");
+      const task:TaskContext={question:message.task!.question,...(oneOffIntent(correction)||message.task!.scopeHint==='once'?{scopeHint:'once' as const}:{}),correction:[message.task!.correction,correction].filter(Boolean).join("; ").slice(-2000),...(message.methodRef?{basedOn:message.methodRef}:message.task!.basedOn?{basedOn:message.task!.basedOn}:{})};
+      setMessages(old=>[...old,{id:Date.now()+Math.random(),role:"user",text:correction},{id:Date.now()+Math.random(),role:"assistant",text,plan,task,evidence}]);return null;
+    }catch(e){return (e as Error).message;}finally{methodAction.current=false;setMethodBusy(false);}
+  }
+
+  async function send(text: string, fresh=false) {
+    setBlockedTask("");
     say("user", text);
     if (/^(?:show|open)(?: my| the)? workflows[.!]?$/i.test(text.trim())) {navigate("workflows");return;}
     if (/^(?:show|open)(?: my| the)? activity[.!]?$/i.test(text.trim())) {navigate("history");return;}
     const runRequest=text.trim().match(/^run (?:the )?workflow [“"']?(.+?)[”"']?[.!]?$/i);
-    if(runRequest) {setWorkflowRequest({name:runRequest[1].trim(),token:Date.now()});setPanel("workflow");return;}
+    if(runRequest) {setManualWorkflowsOpen(true);setWorkflowRequest({name:runRequest[1].trim(),token:Date.now()});setPanel("workflow");return;}
     if (sheet) {
       const workflowIntent = /(?:create|build|make|set up).*?(?:daily.*sales.*review|sales.*workflow)/i.test(text);
       const continuing = /follow.?up date/i.test(text) && messages.some(m => m.role === "user" && /daily sales review/i.test(m.text));
       if (workflowIntent || continuing) {
-        setSalesDraft(true); setPanel("workflow");
+        setManualWorkflowsOpen(true);setSalesDraft(true); setPanel("workflow");
         say("assistant","I've proposed a daily follow-up review: overdue open deals, follow-ups due today, and missing follow-up dates. Review the proposal in Workflow and choose Save sales review. You can change the scope there.");
         requestAnimationFrame(() => document.getElementById("sales-review-draft")?.scrollIntoView({block:"start"}));
         return;
@@ -197,16 +260,30 @@ export function App({ caps }: { caps: Capabilities }) {
       setReplying(true);
       let answer: string;
       let usedPlan: import("@/lib/sheet").Plan | undefined;
+      let learned: Awaited<ReturnType<MethodStore["execute"]>>|undefined;
+      let evidence: Awaited<ReturnType<typeof inputEvidence>>|undefined;
       try {
-        const plan = simplePlan(text, sheet);
+        if(!fresh) {
+          const known=recognizeMethod(await loadMethods(),text,sheet);
+          if(known.kind==="changed_input" || known.kind==="ambiguous") {
+            if(asked!==conversation.current)return;
+            say("assistant",known.kind==="changed_input"?"I recognize this request, but the sheet headings have changed. I haven't applied your established rules. Inspect the approach or run this as a new task for the current input.":"More than one approach matches this request. Inspect the approaches before choosing how to proceed.");
+            setBlockedTask(text);setReplying(false);return;
+          }
+          if(known.kind==="match")learned=await methodStore.execute(known.method,sheet);
+        }
+        const plan = learned?learned.plan:simplePlan(text, sheet);
+        if(learned){answer=learned.text;usedPlan=learned.plan;evidence=learned.evidence;}
+        else
         if (plan) { answer = executePlan(sheet, plan); usedPlan = plan; }
         else if (caps.ai) {
           const history = messages.filter(m => m.role === "user" && m.kind !== "run").slice(-6).map(m => m.text);
           const result = await api<{ reply: string; plan?: import("@/lib/sheet").Plan }>("/api/sheet-question", { method: "POST", body: JSON.stringify({ sheet, question: text, history }) }); answer = result.reply; usedPlan = result.plan;
         } else answer = `Open-ended questions need an AI connection on this deployment. You can still ask “how many rows”, “total ${sheet.columns[0]}” or “average ${sheet.columns[0]}” (use a numeric column for totals and averages).`;
-      } catch (e) { answer = e instanceof Error ? e.message : "The question couldn't be answered. Try again."; }
+        if(usedPlan && !evidence)evidence=await inputEvidence(sheet,usedPlan);
+      } catch (e) { answer = e instanceof Error ? e.message : "The question couldn't be answered. Try again."; usedPlan=undefined;learned=undefined;evidence=undefined; }
       if (conversation.current !== asked) return;
-      setReplying(false); setMessages(previous => [...previous, {id:Date.now()+Math.random(),role:"assistant",text:answer,...(usedPlan ? {plan:usedPlan}:{})}]); return;
+      setReplying(false); setMessages(previous => [...previous, {id:Date.now()+Math.random(),role:"assistant",text:answer,...(usedPlan ? {plan:usedPlan,task:{question:text,...(oneOffIntent(text)?{scopeHint:'once' as const}:{})},evidence,...(learned?{methodRef:learned.methodRef,methodStorage:methodStore.storage(learned.methodRef.id)}:{})}:{})}]); return;
     }
     if (!caps.ai) { say("assistant", localReply(text, report)); return; }
     const asked = conversation.current, about = report;
@@ -286,6 +363,7 @@ export function App({ caps }: { caps: Capabilities }) {
   const unverified = caps.email && caps.user && !caps.user.emailVerified;
   const title = view === "routines" ? "Report workflows" : view === "history" ? "Activity" : view === "workflows" ? "Workflows" : "Your work";
 
+  const methodsLibrary=<MethodsLibrary methods={methods} store={methodStore} sheet={sheet} error={methodError} focus={methodFocus} onRefresh={loadMethods} onRun={question=>{navigate("workspace");void send(question);}} onNotice={setToast}/>;
   return <div className={`app-shell ${view === "workspace" ? "chat-app" : ""}`}>
     <Sidebar savedWork={savedWork} activeWorkId={workIdentity?.id??""} onOpenWork={openWork} workflowActive={view === "workspace" && panel === "workflow"} view={view} open={mobileNav} runs={runs} routineCount={routines.length} workspaceName={copy.workspaceName} workspaceDetail={copy.workspaceDetail} accountLabel={copy.accountLabel} accountDetail={copy.accountDetail}
       onWorkflows={() => navigate("workflows")} onNavigate={navigate} onNewConversation={newConversation} onOpenRun={run => openRun(run, false)} onSettings={() => setModal("settings")} onClose={() => setMobileNav(false)} />
@@ -293,14 +371,14 @@ export function App({ caps }: { caps: Capabilities }) {
     <main className="main-shell">
       <header className="topbar"><div className="breadcrumb"><button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMobileNav(true)}><Menu size={20} /></button><button className="breadcrumb-link" onClick={() => navigate("workspace")}>Workspace</button><ChevronRight size={14} /><strong>{title}</strong></div><div className="topbar-right"><span className="prototype-badge"><span /> {copy.badge}</span><button className="icon-button" aria-label="Workspace settings" onClick={() => setModal("settings")}><Settings2 size={18} /></button></div></header>
       <div className="page-content">
-        {!signedOut && <WorkspaceTools workflowRequest={workflowRequest} onSavedList={setSavedWork} requestedWork={requestedWork} onActive={work=>{activeWorkRef.current=work;activeReportRef.current=null;setWorkIdentity(work);writeWorkLocation({view:"workspace",...(work?{workId:work.id}:{})},true);}} onOpenSource={openWork} onContinueChat={()=>{navigate("workspace");setPanel("workflow");}} onPickInput={()=>{reportInput.current=false;fileInput.current?.click();}} toolsMount={toolsMount} workflowMount={workflowMount} onStatus={setSaveStatus} salesDraft={salesDraft} onCloseSalesDraft={() => setSalesDraft(false)} onResults={(results, source) => { if (activeSheetRef.current !== source) { setToast("The active sheet changed while the workflow ran. Run it again on the selected sheet."); return; } conversation.current++; setReplying(false); setMessages(old => [...old,...results]); navigate("workspace"); }} onDirty={setUnsaved} sessionKey={workspaceSession} caps={caps} snapshot={sheet ? {sheets,sheetIndex,messages,sheetMessages:sheetMessages.current} : null} onRestore={(saved,work) => {setComposerDraft("");threadPosition.current=null;activeWorkRef.current=work;activeReportRef.current=null;setWorkIdentity(work); sheetMessages.current = saved.sheetMessages ?? {}; cancelRun(); conversation.current++; setReport(null); setSheets(saved.sheets); setSheetIndex(saved.sheetIndex); setMessages([...saved.messages,...(requestedWork?.id===work.id ? requestedWork.messages??[] : [])]); setError(null); setReplying(false); navigate("workspace"); }} onReview={(id,decision)=>setMessages(previous=>previous.map(m=>m.id===id?{...m,decision}:m))} onNotice={setToast} />}
+        {!signedOut && <WorkspaceTools workflowRequest={workflowRequest} onSavedList={setSavedWork} requestedWork={requestedWork} onActive={work=>{activeWorkRef.current=work;activeReportRef.current=null;setWorkIdentity(work);writeWorkLocation({view:"workspace",...(work?{workId:work.id}:{})},true);}} onOpenSource={openWork} onContinueChat={()=>{setManualWorkflowsOpen(true);navigate("workspace");setPanel("workflow");}} onPickInput={()=>{reportInput.current=false;fileInput.current?.click();}} toolsMount={toolsMount} workflowMount={workflowMount} onStatus={setSaveStatus} salesDraft={salesDraft} onCloseSalesDraft={() => setSalesDraft(false)} onResults={(results, source) => { if (activeSheetRef.current !== source) { setToast("The active sheet changed while the workflow ran. Run it again on the selected sheet."); return; } conversation.current++; setReplying(false); setMessages(old => [...old,...results]); navigate("workspace"); }} onDirty={setUnsaved} sessionKey={workspaceSession} caps={caps} snapshot={sheet ? {sheets,sheetIndex,messages,sheetMessages:sheetMessages.current} : null} onRestore={(saved,work) => {setComposerDraft("");threadPosition.current=null;activeWorkRef.current=work;activeReportRef.current=null;setWorkIdentity(work); sheetMessages.current = saved.sheetMessages ?? {}; cancelRun(); conversation.current++; setReport(null); setSheets(saved.sheets); setSheetIndex(saved.sheetIndex); setMessages([...saved.messages,...(requestedWork?.id===work.id ? requestedWork.messages??[] : [])]); setError(null); setReplying(false); navigate("workspace"); }} onReview={(id,decision)=>setMessages(previous=>previous.map(m=>m.id===id?{...m,decision}:m))} onNotice={setToast} />}
 
         {unverified && <div className="verify-banner" role="status"><MailCheck size={18} /><p>Confirm your email to turn on the AI assistant. We sent a link to <strong>{caps.user!.email}</strong>. Reports work in the meantime.</p><button className="secondary-button" onClick={() => void resendVerification()}>Send a new link</button></div>}
-        {view === "workspace" ? <WorkspaceView draft={composerDraft} onDraft={setComposerDraft} threadPosition={threadPosition} workName={workIdentity?.name} panel={panel} onPanel={setPanel} onToolsMount={setToolsMount} onWorkflowMount={setWorkflowMount} saveStatus={saveStatus} headerRow={headerRow} onHeaderRow={setHeaderRow} onPrepareSheetReport={() => { if (!sheet) return; const csv = [sheet.columns, ...sheet.rows].map(row => row.map(c => '"' + String(c ?? "").replaceAll('"', '""') + '"').join(",")).join("\n"); void runCsv(csv, sheet.name); }} sheet={sheet} sheets={sheets} sheetIndex={sheetIndex} onSelectSheet={index => { conversation.current++; setReplying(false); sheetMessages.current[sheetIndex] = messages; setSheetIndex(index); setMessages(sheetMessages.current[index] ?? []); setError(null); }} report={report} messages={messages} busy={busy} replying={replying} stage={stage} error={error} privacyNote={sheet ? "Excel workbooks are parsed on our server without being saved. CSV files are parsed in this tab. AI questions are calculated on our server; Claude receives column headings and your questions only. Only Save workspace retains the parsed data and conversation." : copy.privacyNote} modeLabel={copy.modeLabel}
+        {view === "workspace" ? <WorkspaceView advancedWorkflow={manualWorkflowsOpen} onAdvancedWorkflow={setManualWorkflowsOpen} methodsLibrary={methodsLibrary} methodBusy={methodBusy} methodStorage={methodStore.storage()} onAcceptAnswer={acceptAnswer} onCorrectAnswer={correctAnswer} onInspectMethod={inspectMethod} blockedTask={blockedTask} onFreshTask={()=>void send(blockedTask,true)} draft={composerDraft} onDraft={setComposerDraft} threadPosition={threadPosition} workName={workIdentity?.name} panel={panel} onPanel={setPanel} onToolsMount={setToolsMount} onWorkflowMount={setWorkflowMount} saveStatus={saveStatus} headerRow={headerRow} onHeaderRow={setHeaderRow} onPrepareSheetReport={() => { if (!sheet) return; const csv = [sheet.columns, ...sheet.rows].map(row => row.map(c => '"' + String(c ?? "").replaceAll('"', '""') + '"').join(",")).join("\n"); void runCsv(csv, sheet.name); }} sheet={sheet} sheets={sheets} sheetIndex={sheetIndex} onSelectSheet={index => { conversation.current++; setReplying(false); sheetMessages.current[sheetIndex] = messages; setSheetIndex(index); setMessages(sheetMessages.current[index] ?? []); setError(null); }} report={report} messages={messages} busy={busy} replying={replying||methodBusy} stage={stage} error={error} privacyNote={sheet ? "Excel workbooks are parsed on our server without being saved. CSV files are parsed in this tab. AI questions are calculated on our server; Claude receives column headings, your questions and any calculation rules you ask it to adjust, not source rows. Save workspace retains cells and conversation. Accepting matching requests retains the approach separately, as shown on the result." : copy.privacyNote} modeLabel={copy.modeLabel}
           onPickFile={() => {reportInput.current=false;fileInput.current?.click();}} onUpload={file => {reportInput.current=false;void upload(file);}} onRunSample={runSample} onCancel={() => { cancelRun(); setToast("Report cancelled. Your file is unchanged."); }} onDismissError={() => setError(null)}
           onSend={text => void send(text)} onDownloadReport={() => { if (report) download(`billions-report-${report.startDate}.md`, reportMarkdown(report), "text/markdown"); }}
           onDownloadSample={() => download("billions-sample.csv", SAMPLE_CSV, "text/csv")} onSaveRoutine={() => setModal("routine")} onViewRoutines={() => navigate("routines")} />
-          : view === "workflows" ? <div className="connected-library"><header><h1>Workflows</h1><p>Open an approved way of working, choose an input, and continue in chat.</p></header><div ref={setWorkflowMount}/><details className="legacy-workflows"><summary>Weekly report workflows ({routines.length})</summary><RoutinesView routines={routines} storageNote={copy.storageNote} banner={copy.routinesBanner} onCreate={()=>setModal("routine")} onDelete={routine=>void deleteRoutine(routine)} onRun={()=>{reportInput.current=true;fileInput.current?.click();}}/></details></div>
+          : view === "workflows" ? <div className="connected-library"><header><h1>Workflows</h1><p>Open an approved way of working, choose an input, and continue in chat.</p></header>{methodsLibrary}<details open={manualWorkflowsOpen} onToggle={e=>setManualWorkflowsOpen(e.currentTarget.open)} className="legacy-workflows"><summary>Advanced: build calculation steps</summary><div ref={setWorkflowMount}/></details><details className="legacy-workflows"><summary>Weekly report workflows ({routines.length})</summary><RoutinesView routines={routines} storageNote={copy.storageNote} banner={copy.routinesBanner} onCreate={()=>setModal("routine")} onDelete={routine=>void deleteRoutine(routine)} onRun={()=>{reportInput.current=true;fileInput.current?.click();}}/></details></div>
           : view === "history" ? <HistoryView cloud={caps.mode==="cloud"} onContinueRun={(job)=>openWork(job.workspace_id,[{id:Date.now(),role:"assistant",kind:"run",text:`Recorded workflow run: ${job.name}.\n${job.result??job.error??job.status}\nThe current source workspace may have changed since this run.`}])} runs={runs} storageNote={copy.storageNote} onOpen={run => openRun(run, true)} onDelete={run => void deleteRun(run)} onClear={() => void clearHistory()} onRunSample={runSample} />
           : <RoutinesView routines={routines} storageNote={copy.storageNote} banner={copy.routinesBanner} onCreate={() => setModal("routine")} onDelete={routine => void deleteRoutine(routine)} onRun={()=>{reportInput.current=true;fileInput.current?.click();}} />}
       </div>

@@ -13,7 +13,7 @@ const dbName = `billions_test_${randomBytes(4).toString("hex")}`;
 const role = "billions_app_test", rolePassword = randomBytes(12).toString("hex");
 let appUrl = "";
 
-type Modules = { auth: typeof import("../src/server/auth.ts"); repo: typeof import("../src/server/repo.ts"); db: typeof import("../src/server/db.ts"); limits: typeof import("../src/server/limits.ts") };
+type Modules = { methods: typeof import("../src/server/methods.ts"); auth: typeof import("../src/server/auth.ts"); repo: typeof import("../src/server/repo.ts"); db: typeof import("../src/server/db.ts"); limits: typeof import("../src/server/limits.ts") };
 let m: Modules;
 
 const withUrl = (url: string, database: string, user?: string, password?: string) => {
@@ -44,7 +44,7 @@ before(async () => {
   await owner.end();
   appUrl = withUrl(admin, dbName, role, rolePassword);
   process.env.DATABASE_URL = appUrl;
-  m = { auth: await import("../src/server/auth.ts"), repo: await import("../src/server/repo.ts"), db: await import("../src/server/db.ts"), limits: await import("../src/server/limits.ts") };
+  m = { methods: await import("../src/server/methods.ts"), auth: await import("../src/server/auth.ts"), repo: await import("../src/server/repo.ts"), db: await import("../src/server/db.ts"), limits: await import("../src/server/limits.ts") };
 });
 
 after(async () => {
@@ -282,4 +282,45 @@ test("a password change can't go through on a session that ended after its check
 test("addresses with display names or brackets are refused", { skip }, async () => {
   for (const email of ["x<me@example.com>", "a,b@example.com", "\"q\"@example.com", "me@exa mple.com"]) await assert.rejects(signUp(email), { code: "invalid_input" }, email);
   assert.equal(await m.auth.requestPasswordReset("x<reset@example.com>"), null);
+});
+
+
+test("accepted methods are independent, versioned, tenant scoped and reject stale writes", {skip}, async()=>{
+ const {session:a}=await signUp("methods-a@example.com"),{session:b}=await signUp("methods-b@example.com");
+ const sheet={name:"first.csv",columns:["Amount","Status"],rows:[[100,"Posted"],[900,"Pending"]]};
+ const first=await m.methods.acceptMethod(a.businessId,a.userId,{sheet,task:{question:"Total Amount"},plan:{operation:"sum",column:"Amount"}});
+ assert.equal(first.revision,1);assert.ok(await m.methods.methodsReady());
+ await assert.rejects(m.methods.methodDetail(b.businessId,first.id),{status:404});
+ await assert.rejects(m.methods.executeMethod(b.businessId,first.id,1,sheet),{code:"method_conflict"});
+ const second=await m.methods.acceptMethod(a.businessId,a.userId,{sheet,task:{question:"Total Amount",correction:"Only Posted",basedOn:{id:first.id,version:1}},plan:{operation:"sum",column:"Amount",filters:[{column:"Status",operator:"equals",value:"Posted"}]}});
+ assert.equal(second.revision,2);assert.equal(second.versions[0].plan.filters,undefined);
+ await assert.rejects(m.methods.acceptMethod(a.businessId,a.userId,{sheet,task:{question:"Total Amount",basedOn:{id:first.id,version:1}},plan:{operation:"sum",column:"Amount"}}),{code:"method_conflict"});
+ const run=await m.methods.executeMethod(a.businessId,first.id,2,sheet);
+ assert.match(run.text,/All rows: 100/);assert.equal(run.methodRef.version,2);
+ const detail=await m.methods.methodDetail(a.businessId,first.id);
+ assert.equal(detail.runs.length,1);assert.equal(detail.runs[0].evidence.rowCount,2);assert.equal('rows' in detail.runs[0].evidence,false);
+ await assert.rejects(m.methods.executeMethod(a.businessId,first.id,2,{name:"changed.csv",columns:["Amount"],rows:[[100]]}),{code:"changed_input"});
+ const restored=await m.methods.changeMethod(a.businessId,a.userId,first.id,2,1);
+ assert.equal(restored!.revision,3);assert.equal(restored!.versions.at(-1)!.restoredFrom,1);
+ await assert.rejects(m.methods.changeMethod(a.businessId,a.userId,first.id,2),{code:"method_conflict"});
+ await m.methods.changeMethod(a.businessId,a.userId,first.id,3);
+ assert.equal((await m.methods.listMethods(a.businessId)).length,0);
+ const expiring=await m.methods.acceptMethod(a.businessId,a.userId,{sheet,task:{question:"How many rows"},plan:{operation:"count"}});
+ await m.methods.executeMethod(a.businessId,expiring.id,1,sheet);
+ await m.db.withTenant(a.businessId,c=>c.query("UPDATE learned_methods SET expires_at=now()-interval '1 second' WHERE id=$1",[expiring.id]));
+ await assert.rejects(m.methods.executeMethod(a.businessId,expiring.id,1,sheet),{code:"method_conflict"});
+ assert.equal((await m.methods.listMethods(a.businessId)).length,0);
+ assert.equal((await m.db.withTenant(a.businessId,c=>c.query("SELECT * FROM method_executions WHERE method_id=$1",[expiring.id]))).rows.length,0);
+});
+
+test("parallel method acceptance cannot create conflicting defaults", {skip},async()=>{
+ const {session}=await signUp("methods-race@example.com");
+ const body={sheet:{name:"source.csv",columns:["Amount"],rows:[[1]]},task:{question:"Total Amount"},plan:{operation:"sum",column:"Amount"}};
+ const results=await Promise.allSettled([m.methods.acceptMethod(session.businessId,session.userId,body),m.methods.acceptMethod(session.businessId,session.userId,body)]);
+ assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal((await m.methods.listMethods(session.businessId)).length,1);
+ const current=(await m.methods.listMethods(session.businessId))[0];
+ const update={...body,task:{question:"Total Amount",basedOn:{id:current.id,version:1}}};
+ const competing=await Promise.allSettled([m.methods.acceptMethod(session.businessId,session.userId,update),m.methods.acceptMethod(session.businessId,session.userId,update)]);
+ assert.equal(competing.filter(r=>r.status==='fulfilled').length,1);
+ assert.equal((await m.methods.listMethods(session.businessId))[0].revision,2);
 });

@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowDownToLine, ArrowUp, ArrowUpRight, FileSpreadsheet, Paperclip, Play, Settings2, Sparkles, Upload, X } from "lucide-react";
+import { AnswerLearning } from "@/components/AnswerLearning";
+import type {MethodRef} from "@/lib/methods";
+import type {MethodStorage} from "@/lib/method-store";
+import { evaluatePlan } from "@/lib/sheet";
 import { SheetAnswer } from "@/components/SheetAnswer";
 import { SheetExplorer } from "@/components/SheetExplorer";
 import { ReportCard } from "@/components/ReportCard";
@@ -22,6 +26,11 @@ const STAGES = [
 ];
 
 type Props = {
+  advancedWorkflow:boolean;onAdvancedWorkflow:(open:boolean)=>void;
+  methodsLibrary:React.ReactNode; methodBusy:boolean; methodStorage:MethodStorage;
+  onAcceptAnswer:(message:Message,scope:"once"|"matching")=>Promise<string|null>;
+  onCorrectAnswer:(message:Message,text:string)=>Promise<string|null>; onInspectMethod:(ref:MethodRef)=>void;
+  blockedTask:string;onFreshTask:()=>void;
   draft:string; onDraft:(draft:string)=>void; threadPosition:React.MutableRefObject<{top:number;follow:boolean}|null>;
   workName?:string;
   panel: "data"|"workflow"|"results"|"manage"|null; onPanel:(panel:"data"|"workflow"|"results"|"manage"|null)=>void;
@@ -51,6 +60,11 @@ export function WorkspaceView(props: Props) {
   const closePanel=()=> {const closingFocus=document.activeElement;props.onPanel(null);requestAnimationFrame(()=>{if(document.activeElement===document.body || document.activeElement===closingFocus)document.getElementById("message")?.focus({preventScroll:true});});};
   const inspect=(rows:number[])=> {setSourceRows(rows);props.onPanel("data");};
   function send(event:FormEvent) {event.preventDefault();const text=draft.trim();if(!text || busy || replying)return;setDraft("");follow.current=true;setAtLatest(true);props.onSend(text);}
+  function answer(message:Message) {
+    if(!message.plan || !props.sheet)return message.text;
+    let current=false;try{current=evaluatePlan(props.sheet,message.plan).text===message.text;}catch{/* Historical answer remains text. */}
+    return <><SheetAnswer sheet={props.sheet} plan={message.plan} text={message.text} onSources={inspect}/>{current && <AnswerLearning key={message.id} message={message} disabled={busy||replying||props.methodBusy} storage={props.methodStorage} onAccept={props.onAcceptAnswer} onCorrect={props.onCorrectAnswer} onInspect={props.onInspectMethod}/>}</>;
+  }
   const results=messages.filter(m=>m.plan && m.role==="assistant");
   return <div className={`chat-workspace ${wide ? "workbench-wide" : ""} ${props.panel ? "with-workbench" : ""}`}>
     <h1 className="sr-only">Naxium conversation</h1>
@@ -72,15 +86,16 @@ export function WorkspaceView(props: Props) {
         <div className={`conversation-card ${dragging?"dragging":""}`} onDragEnter={e=>{e.preventDefault();dragDepth.current++;setDragging(true);}} onDragOver={e=>e.preventDefault()} onDragLeave={e=>{e.preventDefault();if(--dragDepth.current<=0)setDragging(false);}} onDrop={e=>{e.preventDefault();dragDepth.current=0;setDragging(false);const file=e.dataTransfer.files[0];if(file)props.onUpload(file);}}>
           {dragging && <div className="drop-overlay"><Upload size={28}/><strong>Drop your spreadsheet here</strong><span>Excel or CSV · up to 2 MB</span></div>}
           <div className={`conversation-body ${messages.length?"has-messages":"empty-thread"}`} ref={body} onScroll={e=>{const el=e.currentTarget;const latest=el.scrollHeight-el.scrollTop-el.clientHeight<80;follow.current=latest;setAtLatest(latest);props.threadPosition.current={top:el.scrollTop,follow:latest};}}>
-            {!messages.length ? <div className="chat-welcome"><Sparkles size={28}/><h2>What would you like to work on?</h2><p>Bring a spreadsheet. Ask a question. Build a way of working.</p><div className="starter-actions"><button disabled={busy} onClick={props.onPickFile}><FileSpreadsheet size={17}/> Upload a spreadsheet</button><button disabled={busy} onClick={props.onRunSample}><Play size={17}/> Try a sample report</button><button onClick={()=>{setDraft("Help me build a workflow from my spreadsheet.");document.getElementById("message")?.focus();}}>Build a workflow <ArrowUpRight size={15}/></button></div></div>
-              : <div className="message-list" aria-live="polite">{messages.map(message=><div className={`message ${message.role}`} key={message.id}>{message.role==="assistant" && <span className="message-avatar"><Sparkles size={15}/></span>}<div>{message.plan && props.sheet ? <SheetAnswer sheet={props.sheet} plan={message.plan} text={message.text} onSources={inspect}/> : message.text}</div></div>)}{replying && <div className="message assistant"><span className="message-avatar"><Sparkles size={15}/></span><div className="typing" aria-label="Naxium is replying"><i/><i/><i/></div></div>}</div>}
+            {!messages.length ? <div className="chat-welcome"><Sparkles size={28}/><h2>What would you like to work on?</h2><p>Bring a spreadsheet. Ask a question. Build a way of working.</p><div className="starter-actions"><button disabled={busy} onClick={props.onPickFile}><FileSpreadsheet size={17}/> Upload a spreadsheet</button><button disabled={busy} onClick={props.onRunSample}><Play size={17}/> Try a sample report</button><button onClick={()=>{setDraft("Help me work with this spreadsheet.");document.getElementById("message")?.focus();}}>Help with a task <ArrowUpRight size={15}/></button></div></div>
+              : <div className="message-list" aria-live="polite">{messages.map(message=><div className={`message ${message.role}`} key={message.id}>{message.role==="assistant" && <span className="message-avatar"><Sparkles size={15}/></span>}<div>{answer(message)}</div></div>)}{replying && <div className="message assistant"><span className="message-avatar"><Sparkles size={15}/></span><div className="typing" aria-label="Naxium is replying"><i/><i/><i/></div></div>}</div>}
+            {props.blockedTask && <div className="method-repair" role="status"><p>Your established approach has not run on this input.</p><button className="secondary-button" onClick={()=>props.onPanel("workflow")}>Inspect approaches</button><button className="text-button" onClick={props.onFreshTask} disabled={busy||replying}>Run as a new task</button></div>}
             {busy && <div className="progress-card" role="status"><span className="spinner"/><div><strong>{STAGES[stage][0]}</strong><small>{STAGES[stage][1]}</small></div><button className="icon-button" aria-label="Cancel report" onClick={props.onCancel}><X size={16}/></button></div>}
             {error && <div className="error-card" role="alert"><div><strong>{ERROR_TITLES[error.kind]}</strong><p>{error.message}</p></div><button className="icon-button" aria-label="Dismiss error" onClick={props.onDismissError}><X size={16}/></button></div>}
           </div>
           {!atLatest && <button className="jump-latest secondary-button" onClick={()=>{if(body.current)body.current.scrollTop=body.current.scrollHeight;follow.current=true;setAtLatest(true);}}>Jump to latest ↓</button>}
           <div className="composer-wrap">
             {props.sheet && <button className="attached-file" onClick={()=>props.onPanel("data")}><FileSpreadsheet size={14}/><span>{props.sheet.name}</span><small>{props.sheet.rows.length} rows</small></button>}
-            <form className="composer" onSubmit={send}><label className="sr-only" htmlFor="message">Message Naxium</label><textarea id="message" value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Ask Naxium to analyse, review or build a workflow…" rows={2} maxLength={2000} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();e.currentTarget.form?.requestSubmit();}}}/><div className="composer-tools"><div><button type="button" className="icon-button" aria-label="Attach spreadsheet" disabled={busy} onClick={props.onPickFile}><Paperclip size={18}/></button><span className="composer-mode">{replying?"Working on your question…":"Naxium"}</span></div><button type="submit" className="send-button" aria-label="Send message" disabled={!draft.trim()||busy||replying}><ArrowUp size={18}/></button></div></form>
+            <form className="composer" onSubmit={send}><label className="sr-only" htmlFor="message">Message Naxium</label><textarea id="message" value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Tell Naxium what you want to get done…" rows={2} maxLength={2000} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();e.currentTarget.form?.requestSubmit();}}}/><div className="composer-tools"><div><button type="button" className="icon-button" aria-label="Attach spreadsheet" disabled={busy} onClick={props.onPickFile}><Paperclip size={18}/></button><span className="composer-mode">{replying?"Working on your question…":"Naxium"}</span></div><button type="submit" className="send-button" aria-label="Send message" disabled={!draft.trim()||busy||replying}><ArrowUp size={18}/></button></div></form>
             <details className="privacy-disclosure"><summary>How your data is handled</summary><p>{props.privacyNote}</p></details>
           </div>
         </div>
@@ -90,7 +105,7 @@ export function WorkspaceView(props: Props) {
         <div className="workbench-pane" id="pane-data" hidden={props.panel!=="data"}>
           {props.sheet && <section className="report-column" aria-label="Spreadsheet preview"><div className="section-heading"><h2>Your spreadsheet</h2><span>{props.sheet.rows.length} rows · {props.sheet.columns.length} columns</span></div><div className="sheet-card"><label htmlFor="sheet-select">Active sheet</label><select id="sheet-select" value={props.sheetIndex} onChange={e=>props.onSelectSheet(Number(e.target.value))}>{props.sheets.map((s,i)=><option value={i} key={i}>{s.name}</option>)}</select><SheetExplorer key={`${props.sheetIndex}:${props.sheet.name}`} sheet={props.sheet} sourceRows={sourceRows} onClearSources={()=>setSourceRows(null)} disabled={busy||replying} onQuestion={question=>{setDraft(question);document.getElementById("message")?.focus({preventScroll:true});}}/><details className="sheet-checks"><summary>Weekly report</summary><button className="secondary-button" disabled={busy} onClick={props.onPrepareSheetReport}>Prepare weekly report</button><p>Needs date, description, category and amount columns, AUD values and at most seven consecutive days.</p></details></div></section>}
         </div>
-        <div className="workbench-pane" id="pane-workflow" hidden={props.panel!=="workflow"} ref={props.onWorkflowMount}/>
+        <div className="workbench-pane" id="pane-workflow" hidden={props.panel!=="workflow"}>{props.methodsLibrary}<details open={props.advancedWorkflow} onToggle={e=>props.onAdvancedWorkflow(e.currentTarget.open)}><summary>Advanced calculation workflows</summary><div ref={props.onWorkflowMount}/></details></div>
         <div className="workbench-pane" id="pane-results" hidden={props.panel!=="results"}>
           {report && <section aria-label="Report"><ReportCard report={report} isPreview={false} onDownload={props.onDownloadReport} onSave={props.onSaveRoutine} onRun={props.onRunSample} busy={busy}/></section>}
           {props.sheet && results.map(m=><article className="result-item" key={m.id}><SheetAnswer sheet={props.sheet!} plan={m.plan!} text={m.text} onSources={inspect}/></article>)}
