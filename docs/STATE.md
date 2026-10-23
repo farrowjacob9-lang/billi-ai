@@ -4,6 +4,12 @@ Branch: `spreadsheet-questions`. Draft PR: https://github.com/farrowjacob9-lang/
 
 Preview: https://billi-ai-git-spreadsheet-questions-naxium-langs-projects.vercel.app/
 
+## Excel compatibility fix — exact failing CRM reproduced
+
+Uploaded CRM is 6768 bytes and uses namespace-prefixed SpreadsheetML (`x:workbook`, `x:sheets`, etc.). ExcelJS 4.4 fails in `xlsx.js` reading `workbook.sheets` because its transforms match unprefixed names. This reproduces locally and supersedes the earlier runtime-only hypotheses. The fix resolves spreadsheet/relationship element names using a namespace-aware XML parser before ExcelJS import. Text, rich strings and relationship attributes are preserved; DTDs are rejected. Original uploads are unchanged.
+
+Exact fictional CRM tracked as `tests/fixtures/naxium-sales-crm-prefixed.xlsx`: 24 rows, 10 columns, total Deal value 442300. Production build/typecheck passed; all 11 spreadsheet browser tests passed, including this upload and total. Six reader tests passed, including prefixed formula rejection and text preservation. Direct JSZip/saxes dependency declarations reuse installed versions. Deployment still needs user confirmation on the hosted preview; do not claim every Excel format is supported.
+
 ## Confirmed by the user in the hosted preview
 
 - Signed in successfully after password recovery.

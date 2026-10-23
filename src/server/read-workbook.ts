@@ -1,3 +1,4 @@
+import { normalizeWorkbookNamespaces } from "./workbook-namespaces.ts";
 import { makeSheet, type Cell, type Sheet } from "../lib/sheet.ts";
 import { WorkbookReadError, workbookFailureKind, workbookDiagnostic } from "../lib/workbook-error.ts";
 import { randomUUID } from "node:crypto";
@@ -28,7 +29,8 @@ export async function parseWorkbook(buffer: ArrayBuffer, fileName: string, heade
     workbook = new ExcelJS.Workbook();
     // ExcelJS's declaration calls its input an ArrayBuffer, but its Node entry
     // point supports/recommends Buffer. Avoid browser-style byte dispatch here.
-    const bytes = Buffer.from(buffer);
+    stage = "namespace-compatibility";
+    const bytes = await normalizeWorkbookNamespaces(Buffer.from(buffer));
     stage = "parse";
     await workbook.xlsx.load(bytes as unknown as Parameters<typeof workbook.xlsx.load>[0]);
   } catch (error) {

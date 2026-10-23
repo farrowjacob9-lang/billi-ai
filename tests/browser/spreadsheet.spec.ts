@@ -199,3 +199,12 @@ test('clarification and monthly results remain distinguishable and service healt
  expect([401,404]).toContain((await request.get('/api/readiness')).status());
  const invalid=await request.post('/api/sheet-question',{data:{}});expect(invalid.headers()['x-request-id']).toBeTruthy();
 });
+
+test('the exact namespace-prefixed CRM uploads and totals successfully',async({page})=>{
+ await page.goto('/');
+ await page.getByLabel('Upload spreadsheet').setInputFiles('tests/fixtures/naxium-sales-crm-prefixed.xlsx');
+ await expect(page.getByRole('region',{name:'Spreadsheet preview'})).toBeVisible();
+ await page.getByLabel('Message Naxium').fill('Total Deal value');
+ await page.getByRole('button',{name:'Send message'}).click();
+ await expect(page.getByRole('region',{name:'Conversation workspace'}).getByText(/All rows: 442,300/)).toBeVisible();
+});
