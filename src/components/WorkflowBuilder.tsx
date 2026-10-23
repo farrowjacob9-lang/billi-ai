@@ -1,12 +1,14 @@
 "use client";
 import { useEffect, useState } from "react";
+import { dailySalesReview } from "@/lib/sales-review";
 import { api } from "@/lib/store";
 import type { Sheet } from "@/lib/sheet";
 import type { Snapshot, WorkspaceMessage } from "@/lib/workspace";
 import { requiredWorkflowColumns, runWorkflow, type WorkflowDefinition, type WorkflowStep } from "@/lib/workflow";
 
 type SavedWorkflow = { id: string; name: string; question: string; plan: unknown; cadence: string };
-export function WorkflowBuilder({snapshot,workspaceId,cloud,onResults,onNotice}: {snapshot:Snapshot|null;workspaceId:string;cloud:boolean;onResults:(messages:WorkspaceMessage[], source:Sheet)=>void;onNotice:(message:string)=>void}) {
+export function WorkflowBuilder({salesDraft,onCloseSalesDraft,snapshot,workspaceId,cloud,onResults,onNotice}: {salesDraft:boolean;onCloseSalesDraft:()=>void;snapshot:Snapshot|null;workspaceId:string;cloud:boolean;onResults:(messages:WorkspaceMessage[], source:Sheet)=>void;onNotice:(message:string)=>void}) {
+  const [followScope,setFollowScope] = useState<"due"|"overdue">("due");
   const [steps,setSteps] = useState<WorkflowStep[]>([]);
   const [name,setName] = useState("");
   const [library,setLibrary] = useState<SavedWorkflow[]>([]);
@@ -24,7 +26,14 @@ export function WorkflowBuilder({snapshot,workspaceId,cloud,onResults,onNotice}:
   async function perform(fn:()=>Promise<void>) { setBusy(true); try { await fn(); } catch(e) {onNotice(e instanceof Error ? e.message : "Workflow failed.");} finally {setBusy(false);} }
   const candidates = snapshot?.messages.filter(m=>m.role==="assistant" && m.plan && m.decision?.action !== "excluded") ?? [];
   return <section className="workflow-panel" aria-label="Workflow builder">
-    <h2>Learn a workflow</h2>
+    <h2>Workflows</h2>
+    {salesDraft && sheet && <SalesReviewProposal sheet={sheet} scope={followScope} onScope={setFollowScope} busy={busy} onClose={onCloseSalesDraft} onSave={definition=>void perform(async()=> {
+      let sourceId=workspaceId;
+      if(cloud && !sourceId) sourceId=(await api<{workspace:{id:string}}>("/api/workspaces",{method:"POST",body:JSON.stringify({name:"Sales review source",snapshot})})).workspace.id;
+      if(cloud) await api("/api/workspace-routines",{method:"POST",body:JSON.stringify({action:"create",workspaceId:sourceId,sheetIndex:snapshot!.sheetIndex,name:"Daily sales review",question:"Daily follow-up review",plan:definition,cadence:"manual"})});
+      else {if(library.length>=30) throw new Error("Delete a workflow before saving another.");localStorage.setItem("nx-workflows",JSON.stringify([...library,{id:crypto.randomUUID(),name:"Daily sales review",question:"Daily follow-up review",plan:definition,cadence:"manual"}]));}
+      await refresh();onCloseSalesDraft();onNotice("Daily sales review saved. Choose it below to run on your current or next CRM upload.");
+    })} /> }
     <p>Keep the steps you approve, then repeat them on a new spreadsheet. Nothing learns silently or sends emails.</p>
     <details><summary>Build from successful answers · {steps.length} steps</summary>
       <label>Workflow name<input value={name} maxLength={120} onChange={e=>setName(e.target.value)} placeholder="Monthly expense review" /></label>
@@ -63,5 +72,22 @@ export function WorkflowBuilder({snapshot,workspaceId,cloud,onResults,onNotice}:
     </>}
     {result && <p role="status">{result}</p>}
     <button className="secondary-button" disabled={busy} onClick={()=>void perform(refresh)}>Refresh workflows</button>
+  </section>;
+}
+
+function SalesReviewProposal({sheet,scope,onScope,busy,onSave,onClose}:{sheet:Sheet;scope:"due"|"overdue";onScope:(scope:"due"|"overdue")=>void;busy:boolean;onSave:(definition:WorkflowDefinition)=>void;onClose:()=>void}) {
+  let definition:WorkflowDefinition|null=null,error="";
+  try {definition=dailySalesReview(sheet,scope);} catch(e){error=e instanceof Error?e.message:"Check CRM headings.";}
+  let preview:ReturnType<typeof runWorkflow>|null=null,previewError="";
+  if(definition) try {preview=runWorkflow(definition,sheet);} catch(e){previewError=e instanceof Error?e.message:"Check source dates.";}
+  return <section id="sales-review-draft" aria-label="Proposed daily sales review" className="sheet-checks">
+    <h3>Daily sales review</h3><p>Proposed workflow for your current CRM. Closed Won and Closed Lost deals are excluded. Dates use Australia/Melbourne; “today” updates each time you run it.</p>
+    <label>Follow-up scope<select aria-label="Follow-up scope" value={scope} onChange={e=>onScope(e.target.value as typeof scope)}><option value="due">Overdue and due today</option><option value="overdue">Overdue only</option></select></label>
+    {error && <p role="alert">{error}</p>}
+    <ol>{definition?.steps.map(step=><li key={step.name}><strong>{step.name}</strong><p>{step.question}</p></li>)}</ol>
+    {previewError && <p role="alert">The draft is ready, but this file needs attention before it can run: {previewError} No rows have been silently removed.</p>}
+    {preview && <details><summary>Preview results</summary>{preview.map(step=><div key={step.name}><strong>{step.name}</strong><pre>{step.text}</pre></div>)}</details>}
+    <p>Saving remembers these rules and retains a source workspace for 30 days. This is an on-demand workflow; it sends no emails and does not schedule itself.</p>
+    <button className="primary-button" disabled={busy || !definition} onClick={()=>definition && onSave(definition)}>Save sales review</button><button className="secondary-button" onClick={onClose}>Cancel proposal</button>
   </section>;
 }

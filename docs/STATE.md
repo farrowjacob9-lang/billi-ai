@@ -10,6 +10,14 @@ Uploaded CRM is 6768 bytes and uses namespace-prefixed SpreadsheetML (`x:workboo
 
 Exact fictional CRM tracked as `tests/fixtures/naxium-sales-crm-prefixed.xlsx`: 24 rows, 10 columns, total Deal value 442300. Production build/typecheck passed; all 11 spreadsheet browser tests passed, including this upload and total. Six reader tests passed, including prefixed formula rejection and text preservation. Direct JSZip/saxes dependency declarations reuse installed versions. Deployment still needs user confirmation on the hosted preview; do not claim every Excel format is supported.
 
+## Latest UX direction and sales-review slice
+
+User confirmed Excel upload worked after the namespace compatibility deployment. User wants the chat feel to combine ChatGPT conversation, Codex review/progress, Claude artifacts and Claude Code planning. Research/design specification is in `docs/CHAT-EXPERIENCE-DESIGN.md`; the broader layout redesign is not yet implemented.
+
+New bounded sales intent flow: “Create my daily sales review” proposes overdue/today/missing-date steps, lets the user choose overdue-only vs overdue+today, previews results and has one Save sales review action. Relative today uses Australia/Melbourne on each execution. Closed Won/Lost are explicitly excluded; manual workflow saving does not schedule anything. Cloud saving creates a source workspace if necessary, subject to existing 30-day retention. This is a CRM template, not a general natural-language workflow planner.
+
+Important input finding: the uploaded CRM contains literal text `43` in intended empty follow-up cells. These are source values, not blanks; do not replace them automatically. Date-based preview must flag them rather than guess. Unit tests cover dynamic dates and malformed values. Production build passed; prior 11 spreadsheet browser scenarios passed, and the new one-request proposal/save/run scenario passed after resolving a duplicate-text test selector.
+
 ## Confirmed by the user in the hosted preview
 
 - Signed in successfully after password recovery.

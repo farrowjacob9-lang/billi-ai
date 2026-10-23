@@ -208,3 +208,18 @@ test('the exact namespace-prefixed CRM uploads and totals successfully',async({p
  await page.getByRole('button',{name:'Send message'}).click();
  await expect(page.getByRole('region',{name:'Conversation workspace'}).getByText(/All rows: 442,300/)).toBeVisible();
 });
+
+test('one conversational sales-review request produces a proposal and one save action',async({page})=>{
+ await page.goto('/');
+ await page.getByLabel('Upload spreadsheet').setInputFiles({name:'sales.csv',mimeType:'text/csv',buffer:Buffer.from('Company,Stage,Deal value,Next follow-up\nAlpha,Proposal,100,2026-10-20\nBeta,Qualified,200,2026-10-23')});
+ await page.getByLabel('Message Naxium').fill('Create my daily sales review.');await page.getByRole('button',{name:'Send message'}).click();
+ const proposal=page.getByRole('region',{name:'Proposed daily sales review'});
+ await expect(proposal.getByRole('heading',{name:'Daily sales review',exact:true})).toBeVisible();
+ await expect(proposal.getByText('Overdue follow-ups',{exact:true}).first()).toBeVisible();
+ await expect(proposal.getByText('Follow-ups due today',{exact:true}).first()).toBeVisible();
+ await proposal.getByRole('button',{name:'Save sales review',exact:true}).click();
+ await expect(page.getByText(/Daily sales review saved/)).toBeVisible();
+ await page.getByLabel('Saved workflow',{exact:true}).selectOption({label:'Daily sales review'});
+ await page.getByRole('button',{name:'Run workflow on current sheet'}).click();
+ await expect(page.getByText(/Completed 3 steps/)).toBeVisible();
+});

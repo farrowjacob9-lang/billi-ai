@@ -69,6 +69,7 @@ export function WorkspaceTools({
   onNotice,
   onDirty,
   onResults,
+  salesDraft, onCloseSalesDraft,
 }: {
   caps: Capabilities;
   snapshot: Snapshot | null;
@@ -77,6 +78,7 @@ export function WorkspaceTools({
   onReview: (id: number, d: Decision) => void;
   onNotice: (s: string) => void;
   onDirty: (dirty: boolean) => void;
+  salesDraft: boolean; onCloseSalesDraft: () => void;
   onResults: (messages: Message[], source: Sheet) => void;
 }) {
   const sessionVersion = useRef(sessionKey);
@@ -287,7 +289,7 @@ export function WorkspaceTools({
       {saved.map(w => <button key={w.id} className="secondary-button" disabled={working} aria-current={active === w.id ? "page" : undefined} onClick={() => void perform(() => open(w.id))}>{w.name}</button>)}
       {working && <span role="status">Loading…</span>}
     </nav>}
-    <WorkflowBuilder snapshot={snapshot} workspaceId={active} cloud={cloud} onResults={onResults} onNotice={onNotice} />
+    <WorkflowBuilder salesDraft={salesDraft} onCloseSalesDraft={onCloseSalesDraft} snapshot={snapshot} workspaceId={active} cloud={cloud} onResults={onResults} onNotice={onNotice} />
     <details ref={toolsRef} className="workspace-tools">
       <summary>Saved work, exports & routines</summary>
       <p role="status">{working ? "Working…" : dirty ? "Unsaved changes" : active ? "All changes saved" : "No workspace open"}{active && name ? ` · ${name}` : ""}</p>

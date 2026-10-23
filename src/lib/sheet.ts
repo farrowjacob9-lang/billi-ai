@@ -8,7 +8,8 @@ export type Plan = {
   column?: string;
   groupBy?: string;
   period?: "month" | "year";
-  filters?: { column: string; operator: "equals" | "contains" | "gt" | "gte" | "lt" | "lte" | "before" | "after"; value: string | number }[];
+  dateAnchor?: "today";
+  filters?: { column: string; operator: "equals" | "not_equals" | "contains" | "gt" | "gte" | "lt" | "lte" | "before" | "after"; value: string | number }[];
   direction?: "asc" | "desc";
   limit?: number;
 };
@@ -65,10 +66,11 @@ export function validatePlan(value: unknown, sheet: Sheet): Plan {
   if (!["sum", "average", "min", "max", "count", "rows", "distinct"].includes(p.operation)) throw new Error("I can calculate totals, averages, minimums, maximums and counts, or find matching rows. Please ask one of those questions.");
   if (!["count", "rows"].includes(p.operation) && !sheet.columns.includes(p.column ?? "")) throw new Error("Which numeric column should I use?");
   if (p.column !== undefined && !sheet.columns.includes(p.column) || p.groupBy !== undefined && !sheet.columns.includes(p.groupBy)) throw new Error("That column isn't in this sheet. Use one of the headings shown in the preview.");
+  if (p.dateAnchor !== undefined && p.dateAnchor !== "today") throw new Error("Unsupported workflow date anchor.");
   if (p.period !== undefined && (!["month", "year"].includes(p.period) || !p.groupBy)) throw new Error("Choose a date column for monthly or yearly grouping.");
   if (p.operation === "rows" && p.groupBy) throw new Error("Ask for matching rows or a grouped calculation separately.");
   if (p.direction !== undefined && !["asc", "desc"].includes(p.direction) || p.limit !== undefined && (!Number.isInteger(p.limit) || p.limit < 1 || p.limit > 50)) throw new Error("Show between 1 and 50 results, sorted ascending or descending.");
-  if (p.filters !== undefined && (!Array.isArray(p.filters) || p.filters.length > 8 || p.filters.some(f => !f || !sheet.columns.includes(f.column) || !["equals", "contains", "gt", "gte", "lt", "lte", "before", "after"].includes(f.operator) || !["string", "number"].includes(typeof f.value) || String(f.value).length > 2000))) throw new Error("I couldn't interpret the filters. Please name the column and value to match.");
+  if (p.filters !== undefined && (!Array.isArray(p.filters) || p.filters.length > 8 || p.filters.some(f => !f || !sheet.columns.includes(f.column) || !["equals", "not_equals", "contains", "gt", "gte", "lt", "lte", "before", "after"].includes(f.operator) || !["string", "number"].includes(typeof f.value) || String(f.value).length > 2000))) throw new Error("I couldn't interpret the filters. Please name the column and value to match.");
   return p;
 }
 
@@ -86,10 +88,12 @@ export function isoDate(cell: Cell): string | null {
 }
 export function evaluatePlan(sheet: Sheet, raw: unknown): SheetResult {
   const plan = validatePlan(raw, sheet);
-  const filters = plan.filters ?? [];
+  const today = new Intl.DateTimeFormat("en-CA",{timeZone:"Australia/Melbourne",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+  const filters = (plan.filters ?? []).map(f => ({...f,value:plan.dateAnchor === "today" && f.value === "$today" ? today : f.value}));
   const matching = sheet.rows.map((row, i) => ({ row, source: i + (sheet.headerRow ?? 1) + 1 })).filter(({ row }) => filters.every(f => {
     const cell = row[sheet.columns.indexOf(f.column)];
     if (f.operator === "equals") return display(cell).toLowerCase() === String(f.value).toLowerCase();
+    if (f.operator === "not_equals") return display(cell).toLowerCase() !== String(f.value).toLowerCase();
     if (f.operator === "contains") return display(cell).toLowerCase().includes(String(f.value).toLowerCase());
     if (f.operator === "before" || f.operator === "after") {
       const a = isoDate(cell), b = isoDate(f.value);
