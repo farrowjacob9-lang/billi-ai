@@ -4,12 +4,13 @@ import type { Report } from "@/lib/report";
 import type { View } from "@/lib/types";
 
 type Props = {
-  view: View; open: boolean; runs: Report[]; routineCount: number;
+  view: View; workflowActive: boolean; open: boolean; runs: Report[]; routineCount: number;
   workspaceName: string; workspaceDetail: string; accountLabel: string; accountDetail: string;
+  onWorkflows: () => void;
   onNavigate: (view: View) => void; onNewConversation: () => void; onOpenRun: (run: Report) => void; onSettings: () => void; onClose: () => void;
 };
 
-export function Sidebar({ view, open, runs, routineCount, workspaceName, workspaceDetail, accountLabel, accountDetail, onNavigate, onNewConversation, onOpenRun, onSettings, onClose }: Props) {
+export function Sidebar({ view, workflowActive, open, runs, routineCount, workspaceName, workspaceDetail, accountLabel, accountDetail, onWorkflows, onNavigate, onNewConversation, onOpenRun, onSettings, onClose }: Props) {
   return <>
     {open && <button className="nav-backdrop" aria-label="Close navigation" onClick={onClose} />}
     <aside className={`sidebar ${open ? "mobile-open" : ""}`} aria-label="Main navigation">
@@ -18,10 +19,12 @@ export function Sidebar({ view, open, runs, routineCount, workspaceName, workspa
       <button className="new-chat" onClick={onNewConversation}><Plus size={18} /> New conversation <span><ArrowUpRight size={16} /></span></button>
       <div className="nav-label">WORKSPACE</div>
       <nav>
-        <NavItem active={view === "workspace"} onClick={() => onNavigate("workspace")} icon={<LayoutGrid size={18} />} label="Overview" />
-        <NavItem active={view === "routines"} onClick={() => onNavigate("routines")} icon={<Zap size={18} />} label="Routines" count={routineCount || undefined} />
+        <NavItem active={workflowActive} onClick={onWorkflows} icon={<Zap size={18} />} label="Workflows" />
+        <NavItem active={view === "workspace" && !workflowActive} onClick={() => onNavigate("workspace")} icon={<LayoutGrid size={18} />} label="Conversation" />
+        <NavItem active={view === "routines"} onClick={() => onNavigate("routines")} icon={<Zap size={18} />} label="Report routines" count={routineCount || undefined} />
         <NavItem active={view === "history"} onClick={() => onNavigate("history")} icon={<History size={18} />} label="Run history" count={runs.length || undefined} />
       </nav>
+      <div id="saved-work-library" />
       <div className="nav-label recent-label">RECENT WORK <button aria-label="Start a new conversation" onClick={onNewConversation}><Plus size={15} /></button></div>
       <div className="recent-list">{runs.length ? runs.slice(0, 4).map(run => <button key={run.id} onClick={() => onOpenRun(run)}><MessageSquare size={15} /><span>{run.fileName}</span></button>) : <div className="recent-empty">A little quiet here.<br />Your reports will appear as you work.</div>}</div>
       <div className="sidebar-bottom">

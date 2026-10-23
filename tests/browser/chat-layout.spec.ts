@@ -1,0 +1,44 @@
+import {test,expect} from '@playwright/test';
+test('conversation fills the viewport and the workbench closes without losing the thread',async({page})=>{
+ page.on('dialog',d=>d.accept());
+ await page.goto('/');
+ const composer=page.getByLabel('Message Naxium');
+ const box=await composer.boundingBox();expect(box!.y+box!.height).toBeLessThan(1080);
+ await expect(page.getByRole('region',{name:'Workflow builder'})).not.toBeVisible();
+ await page.getByLabel('Upload spreadsheet').setInputFiles({name:'crm.csv',mimeType:'text/csv',buffer:Buffer.from('Category,Amount\nSales,100\nFees,-5')});
+ await expect(page.getByRole('region',{name:'Spreadsheet preview'})).toBeVisible();
+ await page.getByRole('button',{name:'Back to conversation'}).click();
+ await expect(page.getByRole('region',{name:'Spreadsheet preview'})).not.toBeVisible();
+ await expect(composer).toBeFocused();
+ await composer.fill('Total Amount');await page.getByRole('button',{name:'Send message'}).click();
+ const chat=page.getByRole('region',{name:'Conversation workspace'});
+ await expect(chat.getByText(/All rows: 95/)).toBeVisible();
+ await chat.getByRole('button',{name:'Inspect 2 source rows'}).click();
+ await expect(page.getByRole('region',{name:'Spreadsheet preview'})).toBeVisible();
+ await page.getByRole('button',{name:'Back to conversation'}).click();
+ await page.getByRole('tab',{name:'Data',exact:true}).focus();
+ await page.keyboard.press('End');
+ await expect(page.getByRole('tab',{name:'Results',exact:true})).toBeFocused();
+ await expect(page.locator('#pane-results').getByText(/All rows: 95/)).toBeVisible();
+ await page.screenshot({path:test.info().outputPath('chat-workbench-desktop.png')});
+ await page.getByRole('tab',{name:'Workflow',exact:true}).click();
+ const builder=page.getByRole('region',{name:'Workflow builder'});
+ await builder.getByText(/Build from successful answers/).click();
+ await builder.getByLabel('Workflow name',{exact:true}).fill('Keep this draft');
+ await page.locator('.sidebar nav').getByRole('button',{name:/Run history/}).click();
+ await page.locator('.sidebar nav').getByRole('button',{name:'Workflows',exact:true}).click();
+ await expect(builder.getByLabel('Workflow name',{exact:true})).toHaveValue('Keep this draft');
+
+ await page.setViewportSize({width:390,height:844});
+ await expect(page.getByRole('button',{name:'Back to conversation'})).toBeVisible();
+ await page.getByRole('button',{name:'Back to conversation'}).click();
+ await expect(composer).toBeVisible();await expect(composer).toBeFocused();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ const mobileBox=await composer.boundingBox();expect(mobileBox!.y+mobileBox!.height).toBeLessThan(844);
+ await expect.poll(async()=>{const r=await page.locator(".sidebar").boundingBox();return r!.x+r!.width;}).toBeLessThanOrEqual(1);
+ await page.screenshot({path:test.info().outputPath('chat-conversation-mobile.png')});
+ await page.getByRole('tab',{name:'Data',exact:true}).click();
+ await page.getByLabel('Upload spreadsheet').setInputFiles({name:'bad.csv',mimeType:'text/csv',buffer:Buffer.from('Amount,Category\n1')});
+ await expect(chat.getByRole('alert')).toBeVisible();
+
+});

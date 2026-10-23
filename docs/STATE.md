@@ -18,6 +18,12 @@ New bounded sales intent flow: “Create my daily sales review” proposes overd
 
 Important input finding: the uploaded CRM contains literal text `43` in intended empty follow-up cells. These are source values, not blanks; do not replace them automatically. Date-based preview must flag them rather than guess. Unit tests cover dynamic dates and malformed values. Production build passed; prior 11 spreadsheet browser scenarios passed, and the new one-request proposal/save/run scenario passed after resolving a duplicate-text test selector.
 
+## Chat-first layout implementation
+
+Implemented the researched chat/workbench design: viewport-height conversation, fixed composer, optional Data/Workflow/Results panel, wider-panel control and mobile full-width panel with Back to conversation. Saved work is in the sidebar; save/export/settings are under Workspace tools. Upload confirmations and answer metadata are compact, with detailed evidence retained under workings. Source inspection opens Data. Draft workflow state stays mounted while switching history/views. Scroll-follow respects the user's reading position. Keyboard workbench navigation, focus return and mobile error visibility are verified.
+
+Build/typecheck passed. All 23 browser scenarios passed before final polish; final affected spreadsheet/layout and report suites rechecked successfully, with an added draft-preservation case. Browser providers are fakes; hosted account smoke testing remains useful. No database migration or data transformation is part of this redesign. Existing saved work and routines remain supported. See `docs/CHAT-EXPERIENCE-DESIGN.md` for implemented vs future scope.
+
 ## Confirmed by the user in the hosted preview
 
 - Signed in successfully after password recovery.

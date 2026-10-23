@@ -4,6 +4,7 @@ const FAKE = "http://127.0.0.1:4010/requests";
 
 test("a verified model narrative replaces the template and says so", async ({ page, request }) => {
   await page.goto("/");
+  await page.getByText("How your data is handled",{exact:true}).click();
   await expect(page.getByText("Excel is parsed on our server; CSV in your browser. Only the calculated report totals are sent to Claude.")).toBeVisible();
   await page.getByRole("button", { name: "Try a sample report" }).click();
   await expect(page.getByText("Written by Claude · figures verified")).toBeVisible();

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { ArrowDownToLine, ArrowRight, ArrowUp, ArrowUpRight, FileSpreadsheet, MessageSquare, Paperclip, Play, ShieldCheck, Sparkles, Upload, X, Zap } from "lucide-react";
+import { ArrowDownToLine, ArrowUp, ArrowUpRight, FileSpreadsheet, Paperclip, Play, Settings2, Sparkles, Upload, X } from "lucide-react";
 import { SheetAnswer } from "@/components/SheetAnswer";
 import { SheetExplorer } from "@/components/SheetExplorer";
 import { ReportCard } from "@/components/ReportCard";
@@ -22,6 +22,8 @@ const STAGES = [
 ];
 
 type Props = {
+  panel: "data"|"workflow"|"results"|"manage"|null; onPanel:(panel:"data"|"workflow"|"results"|"manage"|null)=>void;
+  onToolsMount:(node:HTMLDivElement|null)=>void; onWorkflowMount:(node:HTMLDivElement|null)=>void; saveStatus:string;
   headerRow: number; onHeaderRow: (row: number) => void;
   sheet: Sheet | null; sheets: Sheet[]; sheetIndex: number; onSelectSheet: (index: number) => void;
   onPrepareSheetReport: () => void;
@@ -31,58 +33,72 @@ type Props = {
 };
 
 export function WorkspaceView(props: Props) {
-  const { report, messages, busy, replying, stage, error, privacyNote, modeLabel } = props;
-  const [sourceRows, setSourceRows] = useState<number[] | null>(null);
-  useEffect(() => setSourceRows(null), [props.sheet]);
-  const [draft, setDraft] = useState("");
-  const [dragging, setDragging] = useState(false);
+  const { report, messages, busy, replying, stage, error } = props;
+  const [wide,setWide] = useState(false);
+  const [sourceRows,setSourceRows] = useState<number[]|null>(null);
+  const [draft,setDraft] = useState("");
+  const [dragging,setDragging] = useState(false);
+  const [atLatest,setAtLatest] = useState(true);
+  const follow = useRef(true);
+  const body = useRef<HTMLDivElement>(null);
   const dragDepth = useRef(0);
-  const messageEnd = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (messages.length) { const body = messageEnd.current?.closest(".conversation-body"); if (body) body.scrollTop = body.scrollHeight; } }, [messages]);
-
-  function send(event: FormEvent) {
-    event.preventDefault(); const text = draft.trim(); if (!text || busy || replying) return;
-    setDraft(""); props.onSend(text);
-  }
-
-  return <>
-    <div className="page-heading"><div><h1>Work with your data</h1><p>Upload a spreadsheet. Ask a question. Check the source.</p></div></div>
-    {/* The conversation has the whole page until there is a report; then it shares it. */}
-    <div className={`workspace-grid ${report || props.sheet ? "split" : "solo"}`}>
-      <section className="conversation-column" aria-label="Conversation workspace">
-        <div className="section-heading"><h2>Conversation</h2><span><span className="status-dot" /> Ready when you are</span></div>
-        <div className={`conversation-card ${dragging ? "dragging" : ""}`} onDragEnter={e => { e.preventDefault(); dragDepth.current++; setDragging(true); }} onDragOver={e => e.preventDefault()} onDragLeave={e => { e.preventDefault(); if (--dragDepth.current <= 0) setDragging(false); }} onDrop={e => { e.preventDefault(); dragDepth.current = 0; setDragging(false); const file = e.dataTransfer.files[0]; if (file) props.onUpload(file); }}>
-          {dragging && <div className="drop-overlay"><Upload size={32} /><strong>Drop your Excel or CSV here</strong><span>Excel is checked on our server without being saved. Up to 2 MB; headings in the first row.</span></div>}
-          <div className="conversation-body">
-            {messages.length === 0 ? <><div className="assistant-avatar"><Sparkles size={22} strokeWidth={1.6} /></div><h3>What would you like to understand?</h3><p>Upload Excel or CSV to get started. Answers show the calculations and rows they use.</p><div className="starter-actions"><button disabled={busy} onClick={props.onPickFile}><FileSpreadsheet size={16} /> Upload a spreadsheet <ArrowUpRight size={14} /></button><button disabled={busy} onClick={props.onRunSample}><Play size={16} /> Try a sample report <ArrowUpRight size={14} /></button><button onClick={() => setDraft("What format should my spreadsheet use?")}><MessageSquare size={16} /> Help me get started <ArrowUpRight size={14} /></button></div></> : <div className="message-list" aria-live="polite">{messages.map(message => <div className={`message ${message.role}`} key={message.id}>{message.role === "assistant" && <span className="message-avatar"><Sparkles size={15} /></span>}<div>{message.plan && props.sheet ? <SheetAnswer sheet={props.sheet} plan={message.plan} text={message.text} onSources={rows => { setSourceRows(rows); document.getElementById("sheet-select")?.scrollIntoView({block:"nearest"}); }} /> : message.text}</div></div>)}{replying && <div className="message assistant"><span className="message-avatar"><Sparkles size={15} /></span><div className="typing" aria-label="Naxium is replying"><i /><i /><i /></div></div>}<div ref={messageEnd} /></div>}
-            {busy && <div className="progress-card" role="status"><span className="spinner" /><div><strong>{STAGES[stage][0]}</strong><small>{STAGES[stage][1]}</small></div><button className="icon-button" aria-label="Cancel report" onClick={props.onCancel}><X size={16} /></button></div>}
-            {error && <div className="error-card" role="alert"><div><strong>{ERROR_TITLES[error.kind]}</strong><p>{error.message}</p></div><button className="icon-button" aria-label="Dismiss error" onClick={props.onDismissError}><X size={16} /></button></div>}
-          </div>
-          <form className="composer" onSubmit={send}><label className="sr-only" htmlFor="message">Message Naxium</label><textarea id="message" value={draft} onChange={e => setDraft(e.target.value)} placeholder="Ask a question, or bring something to work on…" rows={2} maxLength={2000} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }} /><div className="composer-tools"><div><button type="button" className="icon-button" aria-label="Attach spreadsheet" disabled={busy} onClick={props.onPickFile}><Paperclip size={18} /></button><span className="composer-mode"><span /> {modeLabel}</span></div><button type="submit" className="send-button" aria-label="Send message" disabled={!draft.trim() || busy || replying}><ArrowUp size={18} /></button></div></form>
-        </div>
-        <div className="local-note"><ShieldCheck size={13} /> {privacyNote}</div>
-
-        <details className="sheet-checks"><summary>Import settings</summary><label>Column headings are on row <input aria-label="Header row" type="number" min={1} max={100} value={props.headerRow} onChange={e => props.onHeaderRow(Number(e.target.value))} /></label><p>Choose before uploading. Rows above the headings are skipped; all rows below are included. Dates for comparisons must be YYYY-MM-DD. Formulas must be exported as values or CSV.</p><button className="secondary-button" disabled={busy} onClick={props.onPickFile}>Choose file with these settings</button></details>
-        <button className="template-link" onClick={props.onDownloadSample}><ArrowDownToLine size={14} /> Download the sample CSV <span>See the supported format</span></button>
-      </section>
-
-      {props.sheet && <section className="report-column" aria-label="Spreadsheet preview">
-        <div className="section-heading"><h2>Your spreadsheet</h2><span>{props.sheet.rows.length.toLocaleString()} rows · {props.sheet.columns.length} columns</span></div>
-        <div className="sheet-card">
-          <label htmlFor="sheet-select">Active sheet</label>
-          <select id="sheet-select" value={props.sheetIndex} onChange={e => props.onSelectSheet(Number(e.target.value))}>{props.sheets.map((s, i) => <option value={i} key={i}>{s.name}</option>)}</select>
-          <SheetExplorer key={`${props.sheetIndex}:${props.sheet.name}`} sheet={props.sheet} sourceRows={sourceRows} onClearSources={() => setSourceRows(null)} disabled={busy || replying} onQuestion={question => { setDraft(question); document.getElementById("message")?.focus({ preventScroll: true }); }} />
-          <p>Save workspace keeps your parsed data and conversation for 30 days. Unsaved work is removed when you refresh or start a new conversation.</p>
-          <button className="secondary-button" disabled={busy} onClick={props.onPrepareSheetReport}>Prepare weekly report</button>
-          <p>Weekly reporting needs date, description, category and amount columns, AUD amounts, and at most seven consecutive days.</p>
-        </div>
-      </section>}
-      {report && <section className="report-column" aria-label="Report">
-        <div className="section-heading"><h2>Your latest output</h2><span className="output-mode">Ready to review</span></div>
-        <ReportCard report={report} isPreview={false} onDownload={props.onDownloadReport} onSave={props.onSaveRoutine} onRun={props.onRunSample} busy={busy} />
-        <div className="routine-nudge"><span className="nudge-icon"><Zap size={19} /></span><div><strong>Good work is worth repeating.</strong><p>Once it works for you, make it a routine.</p></div><button className="icon-button" aria-label="View routines" onClick={props.onViewRoutines}><ArrowRight size={18} /></button></div>
-      </section>}
+  useEffect(()=>setSourceRows(null),[props.sheet]);
+  useEffect(()=>{if(error) props.onPanel(null);},[error,props.onPanel]);
+  useEffect(()=> {if(follow.current && body.current) body.current.scrollTop=body.current.scrollHeight;},[messages,replying,error]);
+  const closePanel=()=> {props.onPanel(null);requestAnimationFrame(()=>document.getElementById("message")?.focus({preventScroll:true}));};
+  const inspect=(rows:number[])=> {setSourceRows(rows);props.onPanel("data");};
+  function send(event:FormEvent) {event.preventDefault();const text=draft.trim();if(!text || busy || replying)return;setDraft("");follow.current=true;setAtLatest(true);props.onSend(text);}
+  const results=messages.filter(m=>m.plan && m.role==="assistant");
+  return <div className={`chat-workspace ${wide ? "workbench-wide" : ""} ${props.panel ? "with-workbench" : ""}`}>
+    <h1 className="sr-only">Naxium conversation</h1>
+    <div className="chat-toolbar">
+      <div className="thread-title"><strong>{props.sheet ? props.sheet.name.split(" / ").at(-1) : report ? report.fileName : "New conversation"}</strong><small role="status">{props.saveStatus}</small></div>
+      <div className="workbench-tabs" role="tablist" aria-label="Workbench" onKeyDown={e=>{
+        if (!["ArrowLeft","ArrowRight","Home","End"].includes(e.key)) return;
+        const tabs=Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)'));
+        const index=tabs.indexOf(document.activeElement as HTMLButtonElement);if(index<0)return;
+        e.preventDefault();const next=e.key==="Home"?0:e.key==="End"?tabs.length-1:(index+(e.key==="ArrowRight"?1:-1)+tabs.length)%tabs.length;
+        tabs[next].focus();tabs[next].click();
+      }}>
+        {(["data","workflow","results"] as const).map(tab=><button key={tab} role="tab" aria-selected={props.panel===tab} aria-controls={`pane-${tab}`} disabled={tab==="data" && !props.sheet} onClick={()=>props.onPanel(props.panel===tab?null:tab)}>{tab==="data"?"Data":tab==="workflow"?"Workflow":"Results"}</button>)}
+        <button aria-label="Workspace tools" title="Save, export and settings" onClick={()=>props.onPanel(props.panel==="manage"?null:"manage")}><Settings2 size={17}/></button>
+      </div>
     </div>
-
-  </>;
+    <div className="chat-workspace-body">
+      <section className="conversation-column" aria-label="Conversation workspace">
+        <div className={`conversation-card ${dragging?"dragging":""}`} onDragEnter={e=>{e.preventDefault();dragDepth.current++;setDragging(true);}} onDragOver={e=>e.preventDefault()} onDragLeave={e=>{e.preventDefault();if(--dragDepth.current<=0)setDragging(false);}} onDrop={e=>{e.preventDefault();dragDepth.current=0;setDragging(false);const file=e.dataTransfer.files[0];if(file)props.onUpload(file);}}>
+          {dragging && <div className="drop-overlay"><Upload size={28}/><strong>Drop your spreadsheet here</strong><span>Excel or CSV · up to 2 MB</span></div>}
+          <div className={`conversation-body ${messages.length?"has-messages":"empty-thread"}`} ref={body} onScroll={e=>{const el=e.currentTarget;const latest=el.scrollHeight-el.scrollTop-el.clientHeight<80;follow.current=latest;setAtLatest(latest);}}>
+            {!messages.length ? <div className="chat-welcome"><Sparkles size={28}/><h2>What would you like to work on?</h2><p>Bring a spreadsheet. Ask a question. Build a way of working.</p><div className="starter-actions"><button disabled={busy} onClick={props.onPickFile}><FileSpreadsheet size={17}/> Upload a spreadsheet</button><button disabled={busy} onClick={props.onRunSample}><Play size={17}/> Try a sample report</button><button onClick={()=>{setDraft("Help me build a workflow from my spreadsheet.");document.getElementById("message")?.focus();}}>Build a workflow <ArrowUpRight size={15}/></button></div></div>
+              : <div className="message-list" aria-live="polite">{messages.map(message=><div className={`message ${message.role}`} key={message.id}>{message.role==="assistant" && <span className="message-avatar"><Sparkles size={15}/></span>}<div>{message.plan && props.sheet ? <SheetAnswer sheet={props.sheet} plan={message.plan} text={message.text} onSources={inspect}/> : message.text}</div></div>)}{replying && <div className="message assistant"><span className="message-avatar"><Sparkles size={15}/></span><div className="typing" aria-label="Naxium is replying"><i/><i/><i/></div></div>}</div>}
+            {busy && <div className="progress-card" role="status"><span className="spinner"/><div><strong>{STAGES[stage][0]}</strong><small>{STAGES[stage][1]}</small></div><button className="icon-button" aria-label="Cancel report" onClick={props.onCancel}><X size={16}/></button></div>}
+            {error && <div className="error-card" role="alert"><div><strong>{ERROR_TITLES[error.kind]}</strong><p>{error.message}</p></div><button className="icon-button" aria-label="Dismiss error" onClick={props.onDismissError}><X size={16}/></button></div>}
+          </div>
+          {!atLatest && <button className="jump-latest secondary-button" onClick={()=>{if(body.current)body.current.scrollTop=body.current.scrollHeight;follow.current=true;setAtLatest(true);}}>Jump to latest ↓</button>}
+          <div className="composer-wrap">
+            {props.sheet && <button className="attached-file" onClick={()=>props.onPanel("data")}><FileSpreadsheet size={14}/><span>{props.sheet.name}</span><small>{props.sheet.rows.length} rows</small></button>}
+            <form className="composer" onSubmit={send}><label className="sr-only" htmlFor="message">Message Naxium</label><textarea id="message" value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Ask Naxium to analyse, review or build a workflow…" rows={2} maxLength={2000} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();e.currentTarget.form?.requestSubmit();}}}/><div className="composer-tools"><div><button type="button" className="icon-button" aria-label="Attach spreadsheet" disabled={busy} onClick={props.onPickFile}><Paperclip size={18}/></button><span className="composer-mode">{replying?"Working on your question…":"Naxium"}</span></div><button type="submit" className="send-button" aria-label="Send message" disabled={!draft.trim()||busy||replying}><ArrowUp size={18}/></button></div></form>
+            <details className="privacy-disclosure"><summary>How your data is handled</summary><p>{props.privacyNote}</p></details>
+          </div>
+        </div>
+      </section>
+      <aside className="workbench" aria-label="Workbench panel" hidden={!props.panel}>
+        <header className="workbench-heading"><strong>{props.panel==="manage"?"Workspace tools":props.panel==="workflow"?"Workflow":props.panel==="results"?"Results":"Your data"}</strong><button className="panel-width-control" onClick={()=>setWide(!wide)}>{wide ? "Narrow panel" : "Widen panel"}</button><button className="icon-button" aria-label="Back to conversation" onClick={closePanel}><X size={18}/></button></header>
+        <div className="workbench-pane" id="pane-data" hidden={props.panel!=="data"}>
+          {props.sheet && <section className="report-column" aria-label="Spreadsheet preview"><div className="section-heading"><h2>Your spreadsheet</h2><span>{props.sheet.rows.length} rows · {props.sheet.columns.length} columns</span></div><div className="sheet-card"><label htmlFor="sheet-select">Active sheet</label><select id="sheet-select" value={props.sheetIndex} onChange={e=>props.onSelectSheet(Number(e.target.value))}>{props.sheets.map((s,i)=><option value={i} key={i}>{s.name}</option>)}</select><SheetExplorer key={`${props.sheetIndex}:${props.sheet.name}`} sheet={props.sheet} sourceRows={sourceRows} onClearSources={()=>setSourceRows(null)} disabled={busy||replying} onQuestion={question=>{setDraft(question);document.getElementById("message")?.focus({preventScroll:true});}}/><details className="sheet-checks"><summary>Weekly report</summary><button className="secondary-button" disabled={busy} onClick={props.onPrepareSheetReport}>Prepare weekly report</button><p>Needs date, description, category and amount columns, AUD values and at most seven consecutive days.</p></details></div></section>}
+        </div>
+        <div className="workbench-pane" id="pane-workflow" hidden={props.panel!=="workflow"} ref={props.onWorkflowMount}/>
+        <div className="workbench-pane" id="pane-results" hidden={props.panel!=="results"}>
+          {report && <section aria-label="Report"><ReportCard report={report} isPreview={false} onDownload={props.onDownloadReport} onSave={props.onSaveRoutine} onRun={props.onRunSample} busy={busy}/></section>}
+          {props.sheet && results.map(m=><article className="result-item" key={m.id}><SheetAnswer sheet={props.sheet!} plan={m.plan!} text={m.text} onSources={inspect}/></article>)}
+          {!report && !results.length && <p className="workbench-empty">Your calculated answers and reports will appear here. Ask a question to get started.</p>}
+        </div>
+        <div className="workbench-pane" id="pane-manage" hidden={props.panel!=="manage"}>
+          <div ref={props.onToolsMount}/>
+          <details className="sheet-checks"><summary>Import settings</summary><label>Column headings are on row <input aria-label="Header row" type="number" min={1} max={100} value={props.headerRow} onChange={e=>props.onHeaderRow(Number(e.target.value))}/></label><p>Choose before uploading. Rows above the headings are skipped.</p><button className="secondary-button" disabled={busy} onClick={props.onPickFile}>Choose file with these settings</button></details>
+          <button className="template-link" onClick={props.onDownloadSample}><ArrowDownToLine size={14}/> Download the sample CSV</button>
+        </div>
+      </aside>
+    </div>
+  </div>;
 }

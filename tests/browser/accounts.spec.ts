@@ -80,7 +80,7 @@ test("a business's reports and routines persist on the server and stay private t
   await signUp(page, b, "Other Co");
   await page.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();
   await expect(page.getByRole("heading", { name: "Your work has a place here." })).toBeVisible();
-  await page.getByRole("navigation").getByRole("button", { name: /Routines/ }).click();
+  await page.getByRole("navigation").getByRole("button", { name: /Report routines/ }).click();
   await expect(page.getByRole("heading", { name: "Make the next time easier." })).toBeVisible();
   const status = await page.evaluate(async id => (await fetch(`/api/routines/${id}`, { method: "DELETE" })).status, routineId);
   expect(status).toBe(404);

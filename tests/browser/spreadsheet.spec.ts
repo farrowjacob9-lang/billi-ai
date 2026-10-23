@@ -82,6 +82,7 @@ test('Naxium saved work survives refresh, keeps review decisions, and exports Ex
  await expect(page.getByRole('region',{name:'Spreadsheet preview'})).toBeVisible();
  await page.getByLabel('Message Naxium').fill('total Amount');await page.getByRole('button',{name:'Send message'}).click();
  await expect(page.getByRole("region", {name:"Conversation workspace"}).getByText(/All rows: 9,808.97/)).toBeVisible();
+ await page.getByRole('button',{name:'Workspace tools',exact:true}).click();
  await page.getByText('Saved work, exports & routines',{exact:true}).click();
  await page.getByText('Review answers',{exact:true}).click();
  await page.getByRole('button',{name:'Approve',exact:true}).click();
@@ -98,6 +99,7 @@ test('Naxium saved work survives refresh, keeps review decisions, and exports Ex
  await expect(page.getByRole("region", {name:"Conversation workspace"}).getByText(/All rows: 9,808.97/).first()).toBeVisible();
  await expect(page.locator('.workspace-tools')).not.toHaveAttribute('open', '');
  await expect(page.getByText('Opened Tricky financial review. Your spreadsheet and conversation are ready.')).toBeVisible();
+ await page.getByRole('button',{name:'Workspace tools',exact:true}).click();
  await page.getByText('Saved work, exports & routines',{exact:true}).click();
  await page.getByText('Review answers',{exact:true}).click();await expect(page.getByText('approved',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Delete saved workspace',exact:true}).click();
@@ -142,6 +144,7 @@ test('approved workflow remembers steps and reuses them on a fresh file with sch
   await composer.fill(question);await page.getByRole('button',{name:'Send message'}).click();
   await expect(page.getByRole('button',{name:'Send message'})).toBeDisabled();
  }
+ await page.getByRole('tab',{name:'Workflow',exact:true}).click();
  const builder=page.getByRole('region',{name:'Workflow builder'});
  await builder.getByText(/Build from successful answers/).click();
  await builder.getByLabel('Workflow name',{exact:true}).fill('Expense checks');
@@ -150,6 +153,7 @@ test('approved workflow remembers steps and reuses them on a fresh file with sch
  await builder.getByRole('button',{name:'Approve and remember workflow'}).click();
  await expect(page.getByText(/Workflow remembered/)).toBeVisible();
  await upload('new.csv','Category,Amount\nTravel,-50\nSoftware,-5\nFees,-1');
+ await page.getByRole('tab',{name:'Workflow',exact:true}).click();
  await builder.getByLabel('Saved workflow',{exact:true}).selectOption({label:'Expense checks'});
  await builder.getByRole('button',{name:'Run workflow on current sheet'}).click();
  await expect(builder.getByRole('status')).toContainText('Completed 2 steps');
@@ -159,6 +163,7 @@ test('approved workflow remembers steps and reuses them on a fresh file with sch
  await conversation.getByRole('button',{name:'Inspect 3 source rows'}).first().click();
  await expect(page.getByText('Inspecting answer source rows.')).toBeVisible();
  await upload('wrong.csv','Other\n1');
+ await page.getByRole('tab',{name:'Workflow',exact:true}).click();
  await expect(builder.getByRole('alert')).toContainText('Missing columns: Amount');
  await expect(builder.getByRole('button',{name:'Run workflow on current sheet'})).toBeDisabled();
  await builder.getByRole('button',{name:'Forget workflow'}).click();
@@ -167,11 +172,13 @@ test('approved workflow remembers steps and reuses them on a fresh file with sch
 
 test('header choice keeps original row references and explicit autosave preserves new questions',async({page})=>{
  await page.goto('/');
+ await page.getByRole('button',{name:'Workspace tools',exact:true}).click();
  await page.getByText('Import settings',{exact:true}).click();
  await page.getByLabel('Header row').fill('2');
  await page.getByLabel('Upload spreadsheet').setInputFiles({name:'bank.csv',mimeType:'text/csv',buffer:Buffer.from('Bank statement\nCategory,Amount\nTravel,-12\nSoftware,-8')});
  const preview=page.getByRole('region',{name:'Spreadsheet preview'});
  await expect(preview.getByRole('rowheader',{name:'3',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Workspace tools',exact:true}).click();
  await page.getByText('Saved work, exports & routines',{exact:true}).click();
  await page.getByLabel('Workspace name').fill('Bank import');
  await page.getByRole('button',{name:'Save workspace',exact:true}).click();

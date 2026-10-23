@@ -1,4 +1,5 @@
 "use client";
+import { createPortal } from "react-dom";
 import { WorkflowBuilder } from "@/components/WorkflowBuilder";
 import { useEffect, useRef, useState } from "react";
 import { api, type Capabilities } from "@/lib/store";
@@ -69,7 +70,7 @@ export function WorkspaceTools({
   onNotice,
   onDirty,
   onResults,
-  salesDraft, onCloseSalesDraft,
+  salesDraft, onCloseSalesDraft, toolsMount, workflowMount, onStatus,
 }: {
   caps: Capabilities;
   snapshot: Snapshot | null;
@@ -78,9 +79,17 @@ export function WorkspaceTools({
   onReview: (id: number, d: Decision) => void;
   onNotice: (s: string) => void;
   onDirty: (dirty: boolean) => void;
+  toolsMount: HTMLDivElement|null; workflowMount: HTMLDivElement|null; onStatus:(text:string)=>void;
   salesDraft: boolean; onCloseSalesDraft: () => void;
   onResults: (messages: Message[], source: Sheet) => void;
 }) {
+  const [flowContainer,setFlowContainer] = useState<HTMLDivElement|null>(null);
+  const [toolsContainer,setToolsContainer] = useState<HTMLDivElement|null>(null);
+  useEffect(()=> {setFlowContainer(document.createElement("div"));setToolsContainer(document.createElement("div"));},[]);
+  useEffect(()=> {if(workflowMount && flowContainer) {workflowMount.appendChild(flowContainer);return ()=>flowContainer.remove();}},[workflowMount,flowContainer]);
+  useEffect(()=> {if(toolsMount && toolsContainer) {toolsMount.appendChild(toolsContainer);return ()=>toolsContainer.remove();}},[toolsMount,toolsContainer]);
+  const [savedMount,setSavedMount] = useState<HTMLElement|null>(null);
+  useEffect(()=>setSavedMount(document.getElementById("saved-work-library")),[]);
   const sessionVersion = useRef(sessionKey);
   sessionVersion.current = sessionKey;
   const [saved, setSaved] = useState<Saved[]>([]),
@@ -101,6 +110,7 @@ export function WorkspaceTools({
     window.addEventListener("beforeunload", leave);
     return () => window.removeEventListener("beforeunload", leave);
   }, [dirty]);
+  useEffect(()=> { onStatus(working ? "Saving…" : dirty ? "Unsaved changes" : active ? "Saved" : ""); }, [working,dirty,active,onStatus]);
   const toolsRef = useRef<HTMLDetailsElement>(null);
   const [usage, setUsage] = useState<{
     used: number;
@@ -284,13 +294,13 @@ export function WorkspaceTools({
   }
   return (
     <>
-    {saved.length > 0 && <nav aria-label="Saved workspaces" className="saved-work-shortcuts">
+    {savedMount && saved.length > 0 && createPortal(<nav aria-label="Saved workspaces" className="saved-work-shortcuts">
       <strong>Saved work</strong>
       {saved.map(w => <button key={w.id} className="secondary-button" disabled={working} aria-current={active === w.id ? "page" : undefined} onClick={() => void perform(() => open(w.id))}>{w.name}</button>)}
       {working && <span role="status">Loading…</span>}
-    </nav>}
-    <WorkflowBuilder salesDraft={salesDraft} onCloseSalesDraft={onCloseSalesDraft} snapshot={snapshot} workspaceId={active} cloud={cloud} onResults={onResults} onNotice={onNotice} />
-    <details ref={toolsRef} className="workspace-tools">
+    </nav>,savedMount)}
+    {flowContainer && createPortal(<WorkflowBuilder salesDraft={salesDraft} onCloseSalesDraft={onCloseSalesDraft} snapshot={snapshot} workspaceId={active} cloud={cloud} onResults={onResults} onNotice={onNotice} />,flowContainer)}
+    {toolsContainer && createPortal(<details ref={toolsRef} className="workspace-tools">
       <summary>Saved work, exports & routines</summary>
       <p role="status">{working ? "Working…" : dirty ? "Unsaved changes" : active ? "All changes saved" : "No workspace open"}{active && name ? ` · ${name}` : ""}</p>
       <div className="tools-row">
@@ -548,7 +558,7 @@ export function WorkspaceTools({
           <p>Sign in to a business workspace to save durable routines.</p>
         )}
       </details>
-    </details>
+    </details>,toolsContainer)}
     </>
   );
 }

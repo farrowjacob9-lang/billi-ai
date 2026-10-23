@@ -1,6 +1,12 @@
 # Naxium conversation and workbench design
 
-Research: 23 October 2026. Proposed direction, not a claim that the redesign is implemented. User references: Codex, ChatGPT, Claude and Claude Code. Preserve Naxium's own neutral identity and business terminology.
+Research: 23 October 2026. The initial conversation/workbench layout is now implemented; the specification below remains the direction for further refinement. User references: Codex, ChatGPT, Claude and Claude Code. Preserve Naxium's own neutral identity and business terminology.
+
+## Implemented first pass
+
+Viewport-height chat with a persistent composer, short upload confirmation, compact result/source badges and expandable workings. Management panels moved into Workspace tools. Saved work moved into the sidebar. Data / Workflow / Results workbench can be closed or widened; smaller screens use a full-width panel with Back to conversation. Keyboard tab navigation and focus return are supported. Workflow drafts and tool state remain mounted across view changes. Conversation scrolling follows only while at the latest message; users can jump back to latest. Upload errors reveal the conversation instead of being hidden behind a mobile panel.
+
+This does not add general-purpose workflow planning, permanent memory or new execution states. Existing report routines remain available as Report routines. Free drag-resizing, a unified saved-conversation search, full screen-reader/Safari auditing and richer live activity remain later refinements.
 
 ## What is wrong now
 

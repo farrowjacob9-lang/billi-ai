@@ -4,7 +4,7 @@ test("sample report, checks, download, routine and history work across refresh",
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Work with your data" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What would you like to work on?" })).toBeVisible();
   await page.screenshot({ path: "/tmp/billions-desktop.png", fullPage: true });
   // The conversation has the page to itself until a report exists, then shares it.
   await expect(page.getByRole("region", { name: "Report" })).toHaveCount(0);
@@ -28,7 +28,7 @@ test("sample report, checks, download, routine and history work across refresh",
   await page.getByRole("button", { name: "Save routine", exact: true }).click();
   await page.getByLabel("Routine name").fill("Monday business snapshot");
   await page.getByRole("button", { name: "Save routine", exact: true }).last().click();
-  await page.getByRole("navigation").getByRole("button", { name: /Routines/ }).click();
+  await page.getByRole("navigation").getByRole("button", { name: /Report routines/ }).click();
   await expect(page.getByRole("heading", { name: "Monday business snapshot" })).toBeVisible();
   await page.reload();
   await page.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();
@@ -41,6 +41,7 @@ test("sample report, checks, download, routine and history work across refresh",
 test("real uploaded data drives calculations, errors stop invalid reports", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Upload spreadsheet").setInputFiles({ name: "my-week.csv", mimeType: "text/csv", buffer: Buffer.from("date,description,category,amount\n2026-10-05,Consulting,Sales,1250.50\n2026-10-06,Travel,Operations,-50.25") });
+  await page.getByText("Weekly report", {exact:true}).click();
   page.once("dialog", dialog => dialog.accept());
   await page.getByRole("button", { name: "Prepare weekly report", exact: true }).click();
   await expect(page.getByRole("button", { name: "Download report" })).toBeVisible();
@@ -61,12 +62,12 @@ test("the app has icons, and the logo and breadcrumb return to Overview without 
   await page.goto("/");
   await expect(page.locator("link[rel=icon]").first()).toHaveAttribute("href", /favicon\.ico|icon/);
   await page.evaluate(() => { (window as unknown as { marker: boolean }).marker = true; });
-  await page.getByRole("navigation").getByRole("button", { name: /Routines/ }).click();
+  await page.getByRole("navigation").getByRole("button", { name: /Report routines/ }).click();
   await page.getByRole("button", { name: "Workspace", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Work with your data" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What would you like to work on?" })).toBeVisible();
   await page.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();
   await page.getByRole("link", { name: "Naxium overview" }).click();
-  await expect(page.getByRole("heading", { name: "Work with your data" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What would you like to work on?" })).toBeVisible();
   expect(await page.evaluate(() => (window as unknown as { marker?: boolean }).marker)).toBe(true);
   await expect(page.locator(".workspace-picker svg")).toHaveCount(0);
 });
@@ -75,7 +76,8 @@ test("one report can be deleted from run history, leaving the rest", async ({ pa
   await page.goto("/");
   for (const name of ["first.csv", "second.csv"]) {
     await page.getByLabel("Upload spreadsheet").setInputFiles({ name, mimeType: "text/csv", buffer: Buffer.from("date,description,category,amount\n2026-10-05,Consulting,Sales,100.00") });
-    page.once("dialog", dialog => dialog.accept());
+    await page.getByText("Weekly report", {exact:true}).click();
+  page.once("dialog", dialog => dialog.accept());
   await page.getByRole("button", { name: "Prepare weekly report", exact: true }).click();
     await expect(page.getByRole("button", { name: "Download report" })).toBeVisible();
   }
@@ -94,7 +96,7 @@ test("mobile navigation, dialog and report fit the viewport", async ({ page }) =
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: "/tmp/billions-mobile.png", fullPage: true });
   await page.getByRole("button", { name: "Open navigation" }).click();
-  await page.getByRole("navigation").getByRole("button", { name: /Routines/ }).click();
+  await page.getByRole("navigation").getByRole("button", { name: /Report routines/ }).click();
   await expect(page.getByRole("heading", { name: "Your routines." })).toBeVisible();
   await page.getByRole("button", { name: "Create your first routine" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
