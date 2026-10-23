@@ -6,6 +6,7 @@ import { AppDialog, type AccountActions } from "@/components/AppDialog";
 import { HistoryView, RoutinesView } from "@/components/ListViews";
 import { Sidebar } from "@/components/Sidebar";
 import { Toast } from "@/components/ui";
+import {parseWorkHash,writeWorkLocation,type WorkReference,type WorkLocation} from "@/lib/work-navigation";
 import { WorkspaceTools } from "@/components/WorkspaceTools";
 import { WorkspaceView } from "@/components/WorkspaceView";
 import { compactForModel } from "@/lib/ai/verify";
@@ -34,10 +35,22 @@ function uiError(e: unknown): UiError {
 
 // The server decides the mode (browser-only or accounts) and who is signed in before the first render.
 export function App({ caps }: { caps: Capabilities }) {
+  const [savedWork,setSavedWork] = useState<WorkReference[]>([]);
+  const [workIdentity,setWorkIdentity] = useState<WorkReference|null>(null);
+  const activeWorkRef = useRef<WorkReference|null>(null);
+  const activeReportRef = useRef<string|null>(null);
+  const reportChats = useRef<Record<string,Message[]>>({});
+  const [requestedWork,setRequestedWork] = useState<{id:string;token:number;messages?:Message[]}|null>(null);
+  const [pendingReport,setPendingReport] = useState<string|null>(null);
+  const [runsLoaded,setRunsLoaded] = useState(false);
+  const locationHandler = useRef<(location:WorkLocation)=>void>(()=>{});
+  const [composerDraft,setComposerDraft]=useState("");
+  const threadPosition=useRef<{top:number;follow:boolean}|null>(null);
   const [saveStatus,setSaveStatus] = useState("");
   const [panel,setPanel] = useState<"data"|"workflow"|"results"|"manage"|null>(null);
   const [toolsMount,setToolsMount] = useState<HTMLDivElement|null>(null);
   const [workflowMount,setWorkflowMount] = useState<HTMLDivElement|null>(null);
+  const [workflowRequest,setWorkflowRequest] = useState<{name:string;token:number}|null>(null);
   const [salesDraft,setSalesDraft] = useState(false);
   const [unsaved, setUnsaved] = useState(false);
   const [view, setView] = useState<View>("workspace");
@@ -78,7 +91,7 @@ export function App({ caps }: { caps: Capabilities }) {
     if (signedOut) return;
     let live = true;
     Promise.all([store.listRuns(), store.listRoutines()])
-      .then(([r, t]) => { if (live) { setRuns(r); setRoutines(t); } })
+      .then(([r, t]) => { if (live) { setRuns(r); setRoutines(t); setRunsLoaded(true); } })
       .catch(() => { if (live) setToast("We couldn’t load your saved work. Refresh to try again."); });
     return () => { live = false; };
   }, [store, signedOut]);
@@ -93,10 +106,33 @@ export function App({ caps }: { caps: Capabilities }) {
   useEffect(() => () => { operation.current++; abort.current?.abort(); }, []);
 
   const say = (role: Message["role"], text: string, kind?: Message["kind"]) => setMessages(previous => [...previous, { id: Date.now() + Math.random(), role, text, kind }]);
-  function navigate(next: View) { setView(next); setMobileNav(false); }
+  function navigate(next: View, replace=false) { setView(next); setMobileNav(false); writeWorkLocation({view:next,...(next==="workspace" ? activeWorkRef.current ? {workId:activeWorkRef.current.id} : activeReportRef.current ? {reportId:activeReportRef.current} : {} : {})},replace); }
+  function openWork(id:string, contextMessages?:Message[]) {
+    if(activeWorkRef.current?.id===id && sheet) {if(contextMessages)setMessages(old=>[...old,...contextMessages]);navigate("workspace");return;}
+    setRequestedWork({id,token:Date.now()+Math.random(),messages:contextMessages});
+  }
+  locationHandler.current = location => {
+    if(location.workId) openWork(location.workId);
+    else if(location.reportId) setPendingReport(location.reportId);
+    else {if(location.view==="workspace" && (activeWorkRef.current || activeReportRef.current)) newConversation();else {setView(location.view);setMobileNav(false);}}
+  };
+  useEffect(()=> {
+    const restore=()=>locationHandler.current(parseWorkHash(window.location.hash));
+    restore();window.addEventListener("hashchange",restore);
+    return ()=>{window.removeEventListener("hashchange",restore);};
+  },[]);
+  useEffect(()=> {if(report && !sheet)reportChats.current[report.id]=messages;},[report,sheet,messages]);
+  useEffect(()=> {if(pendingReport && runsLoaded) {const found=runs.find(r=>r.id===pendingReport);if(found)openRun(found,true);else {setToast("This report is unavailable or was deleted.");navigate("history",true);}setPendingReport(null);}},[pendingReport,runsLoaded,runs]); // eslint-disable-line react-hooks/exhaustive-deps
   function cancelRun() { operation.current++; abort.current?.abort(); setBusy(false); }
-  function openRun(run: Report, clearMessages: boolean) { if (unsaved && !window.confirm("Discard unsaved spreadsheet changes and open this report?")) return; sheetMessages.current = {}; setWorkspaceSession(n=>n+1); cancelRun(); conversation.current++; setSheets([]); setReplying(false); setReport(run); setError(null); if (clearMessages) setMessages([]); navigate("workspace"); }
-  function newConversation() { if (unsaved && !window.confirm("Discard unsaved changes and start a new conversation?")) return; sheetMessages.current = {}; setWorkspaceSession(n=>n+1); conversation.current++; setReplying(false); cancelRun(); setReport(null); setSheets([]); setMessages([]); setError(null); navigate("workspace"); }
+  function openRun(run: Report, _clearMessages: boolean) {
+    if(unsaved && !window.confirm("Save your current work first if you want to keep it. Open this saved report?")) {navigate("workspace",true);return;}
+    setComposerDraft("");threadPosition.current=null;sheetMessages.current={};setWorkspaceSession(n=>n+1);cancelRun();conversation.current++;
+    activeWorkRef.current=null;setWorkIdentity(null);activeReportRef.current=run.id;
+    setSheets([]);setReplying(false);setReport(run);setError(null);
+    setMessages(reportChats.current[run.id] ?? [{id:Date.now(),role:"assistant",kind:"run",text:`Opened ${run.fileName}, covering ${run.startDate} to ${run.endDate}. This saved report contains calculated totals; an earlier conversation is not retained after reload. Ask about these results to continue.`}]);
+    navigate("workspace");setPanel("results");
+  }
+  function newConversation() { if (unsaved && !window.confirm("Discard unsaved changes and start a new conversation?")) {navigate("workspace",true);return;} setComposerDraft("");threadPosition.current=null;activeWorkRef.current=null;activeReportRef.current=null;setWorkIdentity(null);setPanel(null);sheetMessages.current = {}; setWorkspaceSession(n=>n+1); conversation.current++; setReplying(false); cancelRun(); setReport(null); setSheets([]); setMessages([]); setError(null); navigate("workspace"); }
 
   async function runCsv(csv: string, fileName: string) {
     if (sheet && unsaved && !window.confirm("Save your spreadsheet first if you want to keep it. Continue to the weekly report?")) return;
@@ -113,6 +149,7 @@ export function App({ caps }: { caps: Capabilities }) {
       setStage(2);
       const [{ report: result, saved }] = await Promise.all([store.createRun(csv, fileName, local, controller.signal), pause()]);
       if (stale()) return;
+      activeWorkRef.current=null;activeReportRef.current=result.id;setWorkIdentity(null);writeWorkLocation({view:"workspace",reportId:result.id},true);
       setReport(result); setSheets([]);
       setRuns(previous => [result, ...previous.filter(r => r.id !== result.id)].slice(0, 30));
       if (!saved) setToast("Browser storage is unavailable. You can still download this report, but history won’t survive a refresh.");
@@ -123,7 +160,9 @@ export function App({ caps }: { caps: Capabilities }) {
     } finally { if (!stale()) setBusy(false); }
   }
 
+  const reportInput=useRef(false);
   async function upload(file: File) {
+    if(reportInput.current) {reportInput.current=false;if(!file.name.toLowerCase().endsWith(".csv")){setToast("Weekly report workflows require a CSV with date, description, category and amount columns.");return;}await runCsv(await file.text(),file.name);return;}
     if (busy) return;
     if (unsaved && !window.confirm("Replace the current spreadsheet? Save it first if you want to keep your changes.")) return;
     cancelRun(); conversation.current++; setReplying(false); setBusy(true); setStage(0); setError(null); navigate("workspace");
@@ -131,6 +170,7 @@ export function App({ caps }: { caps: Capabilities }) {
     try {
       const loaded = await readSpreadsheet(file, headerRow);
       if (current !== operation.current) return;
+      setComposerDraft("");threadPosition.current=null;activeWorkRef.current=null;activeReportRef.current=null;setWorkIdentity(null);writeWorkLocation({view:"workspace"});
       sheetMessages.current = {}; setWorkspaceSession(n=>n+1); setSheets(loaded); setSheetIndex(0); setReport(null); setMessages([]);
       say("user", `Work with ${file.name}.`, "run");
       say("assistant", `Loaded ${loaded[0].rows.length} rows and ${loaded[0].columns.length} columns. Ask a question, or tell me the workflow you want to build.`, "run");
@@ -140,6 +180,10 @@ export function App({ caps }: { caps: Capabilities }) {
 
   async function send(text: string) {
     say("user", text);
+    if (/^(?:show|open)(?: my| the)? workflows[.!]?$/i.test(text.trim())) {navigate("workflows");return;}
+    if (/^(?:show|open)(?: my| the)? activity[.!]?$/i.test(text.trim())) {navigate("history");return;}
+    const runRequest=text.trim().match(/^run (?:the )?workflow [“"']?(.+?)[”"']?[.!]?$/i);
+    if(runRequest) {setWorkflowRequest({name:runRequest[1].trim(),token:Date.now()});setPanel("workflow");return;}
     if (sheet) {
       const workflowIntent = /(?:create|build|make|set up).*?(?:daily.*sales.*review|sales.*workflow)/i.test(text);
       const continuing = /follow.?up date/i.test(text) && messages.some(m => m.role === "user" && /daily sales review/i.test(m.text));
@@ -240,24 +284,25 @@ export function App({ caps }: { caps: Capabilities }) {
   const runSample = () => { void runCsv(SAMPLE_CSV, "sample-week.csv"); };
   if (signedOut) return <AuthScreen canEmail={caps.email} notice={sessionEnded ? "Your session has ended. Sign in again to pick up where you left off." : undefined} />;
   const unverified = caps.email && caps.user && !caps.user.emailVerified;
-  const title = view === "routines" ? "Your routines" : view === "history" ? "Run history" : "Overview";
+  const title = view === "routines" ? "Report workflows" : view === "history" ? "Activity" : view === "workflows" ? "Workflows" : "Your work";
 
   return <div className={`app-shell ${view === "workspace" ? "chat-app" : ""}`}>
-    <Sidebar workflowActive={view === "workspace" && panel === "workflow"} view={view} open={mobileNav} runs={runs} routineCount={routines.length} workspaceName={copy.workspaceName} workspaceDetail={copy.workspaceDetail} accountLabel={copy.accountLabel} accountDetail={copy.accountDetail}
-      onWorkflows={() => {navigate("workspace");setPanel("workflow");}} onNavigate={navigate} onNewConversation={newConversation} onOpenRun={run => openRun(run, false)} onSettings={() => setModal("settings")} onClose={() => setMobileNav(false)} />
+    <Sidebar savedWork={savedWork} activeWorkId={workIdentity?.id??""} onOpenWork={openWork} workflowActive={view === "workspace" && panel === "workflow"} view={view} open={mobileNav} runs={runs} routineCount={routines.length} workspaceName={copy.workspaceName} workspaceDetail={copy.workspaceDetail} accountLabel={copy.accountLabel} accountDetail={copy.accountDetail}
+      onWorkflows={() => navigate("workflows")} onNavigate={navigate} onNewConversation={newConversation} onOpenRun={run => openRun(run, false)} onSettings={() => setModal("settings")} onClose={() => setMobileNav(false)} />
 
     <main className="main-shell">
       <header className="topbar"><div className="breadcrumb"><button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMobileNav(true)}><Menu size={20} /></button><button className="breadcrumb-link" onClick={() => navigate("workspace")}>Workspace</button><ChevronRight size={14} /><strong>{title}</strong></div><div className="topbar-right"><span className="prototype-badge"><span /> {copy.badge}</span><button className="icon-button" aria-label="Workspace settings" onClick={() => setModal("settings")}><Settings2 size={18} /></button></div></header>
       <div className="page-content">
-        {!signedOut && <WorkspaceTools toolsMount={toolsMount} workflowMount={workflowMount} onStatus={setSaveStatus} salesDraft={salesDraft} onCloseSalesDraft={() => setSalesDraft(false)} onResults={(results, source) => { if (activeSheetRef.current !== source) { setToast("The active sheet changed while the workflow ran. Run it again on the selected sheet."); return; } conversation.current++; setReplying(false); setMessages(old => [...old,...results]); navigate("workspace"); }} onDirty={setUnsaved} sessionKey={workspaceSession} caps={caps} snapshot={sheet ? {sheets,sheetIndex,messages,sheetMessages:sheetMessages.current} : null} onRestore={saved => { sheetMessages.current = saved.sheetMessages ?? {}; cancelRun(); conversation.current++; setReport(null); setSheets(saved.sheets); setSheetIndex(saved.sheetIndex); setMessages(saved.messages); setError(null); setReplying(false); navigate("workspace"); }} onReview={(id,decision)=>setMessages(previous=>previous.map(m=>m.id===id?{...m,decision}:m))} onNotice={setToast} />}
+        {!signedOut && <WorkspaceTools workflowRequest={workflowRequest} onSavedList={setSavedWork} requestedWork={requestedWork} onActive={work=>{activeWorkRef.current=work;activeReportRef.current=null;setWorkIdentity(work);writeWorkLocation({view:"workspace",...(work?{workId:work.id}:{})},true);}} onOpenSource={openWork} onContinueChat={()=>{navigate("workspace");setPanel("workflow");}} onPickInput={()=>{reportInput.current=false;fileInput.current?.click();}} toolsMount={toolsMount} workflowMount={workflowMount} onStatus={setSaveStatus} salesDraft={salesDraft} onCloseSalesDraft={() => setSalesDraft(false)} onResults={(results, source) => { if (activeSheetRef.current !== source) { setToast("The active sheet changed while the workflow ran. Run it again on the selected sheet."); return; } conversation.current++; setReplying(false); setMessages(old => [...old,...results]); navigate("workspace"); }} onDirty={setUnsaved} sessionKey={workspaceSession} caps={caps} snapshot={sheet ? {sheets,sheetIndex,messages,sheetMessages:sheetMessages.current} : null} onRestore={(saved,work) => {setComposerDraft("");threadPosition.current=null;activeWorkRef.current=work;activeReportRef.current=null;setWorkIdentity(work); sheetMessages.current = saved.sheetMessages ?? {}; cancelRun(); conversation.current++; setReport(null); setSheets(saved.sheets); setSheetIndex(saved.sheetIndex); setMessages([...saved.messages,...(requestedWork?.id===work.id ? requestedWork.messages??[] : [])]); setError(null); setReplying(false); navigate("workspace"); }} onReview={(id,decision)=>setMessages(previous=>previous.map(m=>m.id===id?{...m,decision}:m))} onNotice={setToast} />}
 
         {unverified && <div className="verify-banner" role="status"><MailCheck size={18} /><p>Confirm your email to turn on the AI assistant. We sent a link to <strong>{caps.user!.email}</strong>. Reports work in the meantime.</p><button className="secondary-button" onClick={() => void resendVerification()}>Send a new link</button></div>}
-        {view === "workspace" ? <WorkspaceView panel={panel} onPanel={setPanel} onToolsMount={setToolsMount} onWorkflowMount={setWorkflowMount} saveStatus={saveStatus} headerRow={headerRow} onHeaderRow={setHeaderRow} onPrepareSheetReport={() => { if (!sheet) return; const csv = [sheet.columns, ...sheet.rows].map(row => row.map(c => '"' + String(c ?? "").replaceAll('"', '""') + '"').join(",")).join("\n"); void runCsv(csv, sheet.name); }} sheet={sheet} sheets={sheets} sheetIndex={sheetIndex} onSelectSheet={index => { conversation.current++; setReplying(false); sheetMessages.current[sheetIndex] = messages; setSheetIndex(index); setMessages(sheetMessages.current[index] ?? []); setError(null); }} report={report} messages={messages} busy={busy} replying={replying} stage={stage} error={error} privacyNote={sheet ? "Excel workbooks are parsed on our server without being saved. CSV files are parsed in this tab. AI questions are calculated on our server; Claude receives column headings and your questions only. Only Save workspace retains the parsed data and conversation." : copy.privacyNote} modeLabel={copy.modeLabel}
-          onPickFile={() => fileInput.current?.click()} onUpload={file => void upload(file)} onRunSample={runSample} onCancel={() => { cancelRun(); setToast("Report cancelled. Your file is unchanged."); }} onDismissError={() => setError(null)}
+        {view === "workspace" ? <WorkspaceView draft={composerDraft} onDraft={setComposerDraft} threadPosition={threadPosition} workName={workIdentity?.name} panel={panel} onPanel={setPanel} onToolsMount={setToolsMount} onWorkflowMount={setWorkflowMount} saveStatus={saveStatus} headerRow={headerRow} onHeaderRow={setHeaderRow} onPrepareSheetReport={() => { if (!sheet) return; const csv = [sheet.columns, ...sheet.rows].map(row => row.map(c => '"' + String(c ?? "").replaceAll('"', '""') + '"').join(",")).join("\n"); void runCsv(csv, sheet.name); }} sheet={sheet} sheets={sheets} sheetIndex={sheetIndex} onSelectSheet={index => { conversation.current++; setReplying(false); sheetMessages.current[sheetIndex] = messages; setSheetIndex(index); setMessages(sheetMessages.current[index] ?? []); setError(null); }} report={report} messages={messages} busy={busy} replying={replying} stage={stage} error={error} privacyNote={sheet ? "Excel workbooks are parsed on our server without being saved. CSV files are parsed in this tab. AI questions are calculated on our server; Claude receives column headings and your questions only. Only Save workspace retains the parsed data and conversation." : copy.privacyNote} modeLabel={copy.modeLabel}
+          onPickFile={() => {reportInput.current=false;fileInput.current?.click();}} onUpload={file => {reportInput.current=false;void upload(file);}} onRunSample={runSample} onCancel={() => { cancelRun(); setToast("Report cancelled. Your file is unchanged."); }} onDismissError={() => setError(null)}
           onSend={text => void send(text)} onDownloadReport={() => { if (report) download(`billions-report-${report.startDate}.md`, reportMarkdown(report), "text/markdown"); }}
           onDownloadSample={() => download("billions-sample.csv", SAMPLE_CSV, "text/csv")} onSaveRoutine={() => setModal("routine")} onViewRoutines={() => navigate("routines")} />
-          : view === "history" ? <HistoryView runs={runs} storageNote={copy.storageNote} onOpen={run => openRun(run, true)} onDelete={run => void deleteRun(run)} onClear={() => void clearHistory()} onRunSample={runSample} />
-          : <RoutinesView routines={routines} storageNote={copy.storageNote} banner={copy.routinesBanner} onCreate={() => setModal("routine")} onDelete={routine => void deleteRoutine(routine)} onRun={() => fileInput.current?.click()} />}
+          : view === "workflows" ? <div className="connected-library"><header><h1>Workflows</h1><p>Open an approved way of working, choose an input, and continue in chat.</p></header><div ref={setWorkflowMount}/><details className="legacy-workflows"><summary>Weekly report workflows ({routines.length})</summary><RoutinesView routines={routines} storageNote={copy.storageNote} banner={copy.routinesBanner} onCreate={()=>setModal("routine")} onDelete={routine=>void deleteRoutine(routine)} onRun={()=>{reportInput.current=true;fileInput.current?.click();}}/></details></div>
+          : view === "history" ? <HistoryView cloud={caps.mode==="cloud"} onContinueRun={(job)=>openWork(job.workspace_id,[{id:Date.now(),role:"assistant",kind:"run",text:`Recorded workflow run: ${job.name}.\n${job.result??job.error??job.status}\nThe current source workspace may have changed since this run.`}])} runs={runs} storageNote={copy.storageNote} onOpen={run => openRun(run, true)} onDelete={run => void deleteRun(run)} onClear={() => void clearHistory()} onRunSample={runSample} />
+          : <RoutinesView routines={routines} storageNote={copy.storageNote} banner={copy.routinesBanner} onCreate={() => setModal("routine")} onDelete={routine => void deleteRoutine(routine)} onRun={()=>{reportInput.current=true;fileInput.current?.click();}} />}
       </div>
     </main>
 

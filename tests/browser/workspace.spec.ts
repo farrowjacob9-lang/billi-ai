@@ -28,10 +28,11 @@ test("sample report, checks, download, routine and history work across refresh",
   await page.getByRole("button", { name: "Save routine", exact: true }).click();
   await page.getByLabel("Routine name").fill("Monday business snapshot");
   await page.getByRole("button", { name: "Save routine", exact: true }).last().click();
-  await page.getByRole("navigation").getByRole("button", { name: /Report routines/ }).click();
+  await page.getByRole("navigation").getByRole("button", { name: "Workflows", exact:true }).click();
+  await page.getByText(/^Weekly report workflows \(/).click();
   await expect(page.getByRole("heading", { name: "Monday business snapshot" })).toBeVisible();
   await page.reload();
-  await page.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();
+  await page.getByRole("navigation").getByRole("button", { name: /Activity/ }).click();
   await expect(page.getByRole("button", { name: /sample-week.csv/ }).last()).toBeVisible();
   await page.getByLabel("Search run history").fill("missing.csv");
   await expect(page.getByRole("heading", { name: "No matching reports" })).toBeVisible();
@@ -52,7 +53,7 @@ test("real uploaded data drives calculations, errors stop invalid reports", asyn
   await page.getByLabel("Upload spreadsheet").setInputFiles({ name: "invalid.csv", mimeType: "text/csv", buffer: Buffer.from("date,amount\n2026-10-05") });
   await expect(page.getByRole("region", { name: "Conversation workspace" }).getByRole("alert")).toContainText("CSV rows have different numbers of fields");
   await expect(page.getByRole("region", { name: "Conversation workspace" }).getByRole("alert")).toContainText("Let’s check that file.");
-  await page.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();
+  await page.getByRole("navigation").getByRole("button", { name: /Activity/ }).click();
   await expect(page.getByRole("button", { name: /my-week.csv/ }).last()).toBeVisible();
   await expect(page.getByRole("button", { name: /invalid.csv/ })).toHaveCount(0);
 });
@@ -62,10 +63,11 @@ test("the app has icons, and the logo and breadcrumb return to Overview without 
   await page.goto("/");
   await expect(page.locator("link[rel=icon]").first()).toHaveAttribute("href", /favicon\.ico|icon/);
   await page.evaluate(() => { (window as unknown as { marker: boolean }).marker = true; });
-  await page.getByRole("navigation").getByRole("button", { name: /Report routines/ }).click();
+  await page.getByRole("navigation").getByRole("button", { name: "Workflows", exact:true }).click();
+  await page.getByText(/^Weekly report workflows \(/).click();
   await page.getByRole("button", { name: "Workspace", exact: true }).click();
   await expect(page.getByRole("heading", { name: "What would you like to work on?" })).toBeVisible();
-  await page.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();
+  await page.getByRole("navigation").getByRole("button", { name: /Activity/ }).click();
   await page.getByRole("link", { name: "Naxium overview" }).click();
   await expect(page.getByRole("heading", { name: "What would you like to work on?" })).toBeVisible();
   expect(await page.evaluate(() => (window as unknown as { marker?: boolean }).marker)).toBe(true);
@@ -81,11 +83,11 @@ test("one report can be deleted from run history, leaving the rest", async ({ pa
   await page.getByRole("button", { name: "Prepare weekly report", exact: true }).click();
     await expect(page.getByRole("button", { name: "Download report" })).toBeVisible();
   }
-  await page.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();
+  await page.getByRole("navigation").getByRole("button", { name: /Activity/ }).click();
   await page.getByRole("button", { name: /^Delete report first\.csv/ }).click();
   await expect(page.getByText("Report deleted.")).toBeVisible();
   await page.reload();
-  await page.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();
+  await page.getByRole("navigation").getByRole("button", { name: /Activity/ }).click();
   await expect(page.getByRole("button", { name: /second\.csv/ }).last()).toBeVisible();
   await expect(page.getByRole("button", { name: /first\.csv/ })).toHaveCount(0);
 });
@@ -96,9 +98,10 @@ test("mobile navigation, dialog and report fit the viewport", async ({ page }) =
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: "/tmp/billions-mobile.png", fullPage: true });
   await page.getByRole("button", { name: "Open navigation" }).click();
-  await page.getByRole("navigation").getByRole("button", { name: /Report routines/ }).click();
-  await expect(page.getByRole("heading", { name: "Your routines." })).toBeVisible();
-  await page.getByRole("button", { name: "Create your first routine" }).click();
+  await page.getByRole("navigation").getByRole("button", { name: "Workflows", exact:true }).click();
+  await page.getByText(/^Weekly report workflows \(/).click();
+  await expect(page.getByRole("heading", { name: "Weekly report workflows." })).toBeVisible();
+  await page.getByRole("button", { name: "Create report workflow" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).not.toBeVisible();
@@ -109,6 +112,38 @@ test("cancelling an in-progress report does not save a completed run", async ({ 
   await page.getByRole("button", { name: "Try a sample report" }).click();
   await page.getByRole("button", { name: "Cancel report" }).click();
   await expect(page.getByRole("button", { name: "Download report" })).toHaveCount(0);
-  await page.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();
+  await page.getByRole("navigation").getByRole("button", { name: /Activity/ }).click();
   await expect(page.getByRole("heading", { name: "Your work has a place here." })).toBeVisible();
+});
+
+test('a saved report restores its own context after unrelated spreadsheet work',async({page})=>{
+ page.on('dialog',d=>d.accept());await page.goto('/');
+ await page.getByRole('button',{name:'Try a sample report'}).click();
+ await expect(page.getByRole('button',{name:'Download report'})).toBeVisible();
+ const reportUrl=page.url();
+ await page.getByLabel('Upload spreadsheet').setInputFiles({name:'unrelated.csv',mimeType:'text/csv',buffer:Buffer.from('Amount\n7')});
+ await expect(page.getByRole('region',{name:'Conversation workspace'}).getByText('Work with unrelated.csv.')).toBeVisible();
+ await page.getByRole('navigation',{name:'Saved workspaces'}).getByRole('button',{name:'sample-week.csv',exact:true}).click();
+ await expect(page).toHaveURL(reportUrl);
+ await expect(page.getByRole('region',{name:'Conversation workspace'}).getByText('Work with unrelated.csv.')).toHaveCount(0);
+ await page.reload();
+ await expect(page.getByRole('button',{name:'Download report'})).toBeVisible();
+ await expect(page.getByRole('region',{name:'Conversation workspace'}).getByText(/earlier conversation is not retained after reload/)).toBeVisible();
+});
+
+test('a report workflow asks for fresh input and runs it directly',async({page})=>{
+ page.on('dialog',d=>d.accept());await page.goto('/');
+ await page.getByRole('button',{name:'Try a sample report'}).click();
+ await expect(page.getByRole('button',{name:'Download report'})).toBeVisible();
+ await page.getByRole('button',{name:'Save routine',exact:true}).click();
+ await page.getByLabel('Routine name').fill('Fresh weekly review');
+ await page.getByRole('button',{name:'Save routine',exact:true}).last().click();
+ await page.locator('.sidebar nav').getByRole('button',{name:'Workflows',exact:true}).click();
+ await page.getByText(/^Weekly report workflows \(/).click();
+ const chooser=page.waitForEvent('filechooser');
+ await page.getByRole('button',{name:'Run with a new CSV'}).click();
+ await (await chooser).setFiles({name:'fresh.csv',mimeType:'text/csv',buffer:Buffer.from('date,description,category,amount\n2026-10-05,Consulting,Sales,123')});
+ await expect(page.getByRole('button',{name:'Download report'})).toBeVisible();
+ await expect(page.getByRole('region',{name:'Report'}).getByText('$123',{exact:true}).first()).toBeVisible();
+ await expect(page.locator('.thread-title strong')).toHaveText('fresh.csv');
 });

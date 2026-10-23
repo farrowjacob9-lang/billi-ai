@@ -1,4 +1,4 @@
-export type View = "workspace" | "routines" | "history";
+export type View = "workspace" | "routines" | "history" | "workflows";
 export type Routine = { id: string; name: string; createdAt: string };
 // "run" messages narrate report preparation (and name the file); they are never sent to the model.
 export type Message = import("./workspace").WorkspaceMessage;

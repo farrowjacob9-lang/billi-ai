@@ -4,6 +4,14 @@ Branch: `spreadsheet-questions`. Draft PR: https://github.com/farrowjacob9-lang/
 
 Preview: https://billi-ai-git-spreadsheet-questions-naxium-langs-projects.vercel.app/
 
+## Connected product navigation
+
+Implemented the first product-wide connection layer from `CONNECTED-PRODUCT-EXPERIENCE.md`: shared searchable work/report list; Workflows library; Activity with cloud workflow jobs and Continue in chat; identifier-only saved work/report URLs with reload and Back support. Workflow drafts remain mounted across destinations, and unsent composer drafts/reading position remain in memory through library navigation. Saved work title appears in chat. Chat commands `show my workflows`, `show my activity`, and `run workflow <exact saved name>` call shared navigation/execution actions. Legacy weekly report templates remain accessible in the workflow library and run directly on a newly selected CSV.
+
+Opening a report clears unrelated messages, preserves its own chat for this session, and honestly explains missing historical conversation after reload. Activity continuation labels recorded output separately from the current source workspace. Settings is plainly named and the business badge is no longer a misleading settings trigger. No database migration. Retention is still 30 days; independent workflow memory, durable report chat and immutable historical inputs remain future work.
+
+Validation: production build/typecheck and 36 unit tests passed (19 external-database tests skipped locally); 27 browser cases passed for navigation, workflow reuse, imports, calculations, saves/exports, reload, Back, drafts, report context and mobile layout. The final full browser run includes weekly-template fresh-input execution. Hosted account verification remains separate from fake-provider browser coverage.
+
 ## Excel compatibility fix — exact failing CRM reproduced
 
 Uploaded CRM is 6768 bytes and uses namespace-prefixed SpreadsheetML (`x:workbook`, `x:sheets`, etc.). ExcelJS 4.4 fails in `xlsx.js` reading `workbook.sheets` because its transforms match unprefixed names. This reproduces locally and supersedes the earlier runtime-only hypotheses. The fix resolves spreadsheet/relationship element names using a namespace-aware XML parser before ExcelJS import. Text, rich strings and relationship attributes are preserved; DTDs are rejected. Original uploads are unchanged.

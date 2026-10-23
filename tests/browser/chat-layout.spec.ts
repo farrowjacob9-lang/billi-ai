@@ -25,10 +25,11 @@ test('conversation fills the viewport and the workbench closes without losing th
  const builder=page.getByRole('region',{name:'Workflow builder'});
  await builder.getByText(/Build from successful answers/).click();
  await builder.getByLabel('Workflow name',{exact:true}).fill('Keep this draft');
- await page.locator('.sidebar nav').getByRole('button',{name:/Run history/}).click();
+ await page.locator('.sidebar nav').getByRole('button',{name:/Activity/}).click();
  await page.locator('.sidebar nav').getByRole('button',{name:'Workflows',exact:true}).click();
  await expect(builder.getByLabel('Workflow name',{exact:true})).toHaveValue('Keep this draft');
 
+ await builder.getByRole("button",{name:"Continue in chat"}).click();
  await page.setViewportSize({width:390,height:844});
  await expect(page.getByRole('button',{name:'Back to conversation'})).toBeVisible();
  await page.getByRole('button',{name:'Back to conversation'}).click();
@@ -41,4 +42,52 @@ test('conversation fills the viewport and the workbench closes without losing th
  await page.getByLabel('Upload spreadsheet').setInputFiles({name:'bad.csv',mimeType:'text/csv',buffer:Buffer.from('Amount,Category\n1')});
  await expect(chat.getByRole('alert')).toBeVisible();
 
+});
+
+test('saved work deep links, browser Back and the library preserve conversation context',async({page})=>{
+ page.on('dialog',d=>d.accept());
+ await page.goto('/');
+ await page.getByLabel('Upload spreadsheet').setInputFiles({name:'review.csv',mimeType:'text/csv',buffer:Buffer.from('Category,Amount\nSales,100\nFees,-5')});
+ const composer=page.getByLabel('Message Naxium');
+ await composer.fill('Total Amount');await page.getByRole('button',{name:'Send message'}).click();
+ await expect(page.getByRole('region',{name:'Conversation workspace'}).getByText(/All rows: 95/)).toBeVisible();
+ await page.getByRole('button',{name:'Workspace tools',exact:true}).click();
+ await page.getByText('Saved work, exports & routines',{exact:true}).click();
+ await page.getByLabel('Workspace name').fill('Sales review');
+ await page.getByRole('button',{name:'Save workspace',exact:true}).click();
+ await expect(page).toHaveURL(/#\/work\/[a-zA-Z0-9_-]+$/);
+ const workUrl=page.url();
+ await page.getByRole('button',{name:'Back to conversation'}).click();
+ await composer.fill('Keep this unsent draft');
+ await page.locator('.sidebar nav').getByRole('button',{name:'Workflows',exact:true}).click();
+ await expect(page).toHaveURL(/#\/workflows$/);
+ await page.screenshot({path:'/workspace/artifacts/naxium-connected-workflows.png'});
+ await page.goBack();
+ await expect(composer).toHaveValue('Keep this unsent draft');
+ await expect(page).toHaveURL(workUrl);
+ await page.reload();
+ await expect(page.getByRole('region',{name:'Conversation workspace'}).getByText(/All rows: 95/)).toBeVisible();
+ await expect(page.locator('.thread-title strong')).toHaveText('Sales review');
+ await page.getByLabel('Search your work').fill('missing');
+ await expect(page.getByText('No matching work.',{exact:true})).toBeVisible();
+ await page.getByLabel('Search your work').fill('sales');
+ await expect(page.getByRole('navigation',{name:'Saved workspaces'}).getByRole('button',{name:'Sales review',exact:true})).toBeVisible();
+});
+
+test('chat and workflow library run the same approved method on the selected input',async({page})=>{
+ page.on('dialog',d=>d.accept());await page.goto('/');
+ await page.getByLabel('Upload spreadsheet').setInputFiles({name:'review.csv',mimeType:'text/csv',buffer:Buffer.from('Amount\n12\n8')});
+ const composer=page.getByLabel('Message Naxium');
+ await composer.fill('Total Amount');await page.getByRole('button',{name:'Send message'}).click();
+ await page.getByRole('tab',{name:'Workflow',exact:true}).click();
+ const builder=page.getByRole('region',{name:'Workflow builder'});
+ await builder.getByText(/Build from successful answers/).click();
+ await builder.getByLabel('Workflow name',{exact:true}).fill('My review');
+ await builder.getByRole('button',{name:'Add answer 1 as step',exact:true}).click();
+ await builder.getByRole('button',{name:'Approve and remember workflow'}).click();
+ await expect(page.getByText(/Workflow remembered/)).toBeVisible();
+ await composer.fill('run workflow My review');await page.getByRole('button',{name:'Send message'}).click();
+ await expect(builder.getByRole('status')).toContainText('Completed 1 steps');
+ await expect(builder.getByLabel('Saved workflow').locator('option:checked')).toHaveText('My review');
+ await expect(page.getByRole('region',{name:'Conversation workspace'}).getByText(/All rows: 20/)).toHaveCount(2);
 });

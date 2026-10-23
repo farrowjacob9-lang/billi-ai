@@ -24,7 +24,7 @@ export const GET = route(async () => {
       ).rows,
       jobs: (
         await c.query(
-          "SELECT id,routine_id,status,result,error FROM workspace_jobs WHERE business_id=$1 ORDER BY created_at DESC LIMIT 20",
+          "SELECT j.id,j.routine_id,j.status,j.result,j.error,j.created_at,r.workspace_id,r.name FROM workspace_jobs j JOIN workspace_routines r ON r.business_id=j.business_id AND r.id=j.routine_id WHERE j.business_id=$1 ORDER BY j.created_at DESC LIMIT 20",
           [s.businessId],
         )
       ).rows,

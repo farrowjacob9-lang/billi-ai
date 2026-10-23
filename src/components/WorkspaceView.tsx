@@ -22,6 +22,8 @@ const STAGES = [
 ];
 
 type Props = {
+  draft:string; onDraft:(draft:string)=>void; threadPosition:React.MutableRefObject<{top:number;follow:boolean}|null>;
+  workName?:string;
   panel: "data"|"workflow"|"results"|"manage"|null; onPanel:(panel:"data"|"workflow"|"results"|"manage"|null)=>void;
   onToolsMount:(node:HTMLDivElement|null)=>void; onWorkflowMount:(node:HTMLDivElement|null)=>void; saveStatus:string;
   headerRow: number; onHeaderRow: (row: number) => void;
@@ -36,23 +38,24 @@ export function WorkspaceView(props: Props) {
   const { report, messages, busy, replying, stage, error } = props;
   const [wide,setWide] = useState(false);
   const [sourceRows,setSourceRows] = useState<number[]|null>(null);
-  const [draft,setDraft] = useState("");
+  const {draft,onDraft:setDraft}=props;
   const [dragging,setDragging] = useState(false);
-  const [atLatest,setAtLatest] = useState(true);
-  const follow = useRef(true);
+  const [atLatest,setAtLatest] = useState(props.threadPosition.current?.follow ?? true);
+  const follow = useRef(props.threadPosition.current?.follow ?? true);
   const body = useRef<HTMLDivElement>(null);
   const dragDepth = useRef(0);
+  useEffect(()=>{if(body.current && props.threadPosition.current)body.current.scrollTop=props.threadPosition.current.top;},[]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(()=>setSourceRows(null),[props.sheet]);
   useEffect(()=>{if(error) props.onPanel(null);},[error,props.onPanel]);
   useEffect(()=> {if(follow.current && body.current) body.current.scrollTop=body.current.scrollHeight;},[messages,replying,error]);
-  const closePanel=()=> {props.onPanel(null);requestAnimationFrame(()=>document.getElementById("message")?.focus({preventScroll:true}));};
+  const closePanel=()=> {const closingFocus=document.activeElement;props.onPanel(null);requestAnimationFrame(()=>{if(document.activeElement===document.body || document.activeElement===closingFocus)document.getElementById("message")?.focus({preventScroll:true});});};
   const inspect=(rows:number[])=> {setSourceRows(rows);props.onPanel("data");};
   function send(event:FormEvent) {event.preventDefault();const text=draft.trim();if(!text || busy || replying)return;setDraft("");follow.current=true;setAtLatest(true);props.onSend(text);}
   const results=messages.filter(m=>m.plan && m.role==="assistant");
   return <div className={`chat-workspace ${wide ? "workbench-wide" : ""} ${props.panel ? "with-workbench" : ""}`}>
     <h1 className="sr-only">Naxium conversation</h1>
     <div className="chat-toolbar">
-      <div className="thread-title"><strong>{props.sheet ? props.sheet.name.split(" / ").at(-1) : report ? report.fileName : "New conversation"}</strong><small role="status">{props.saveStatus}</small></div>
+      <div className="thread-title"><strong>{props.workName || (props.sheet ? props.sheet.name.split(" / ").at(-1) : report ? report.fileName : "New conversation")}</strong><small role="status">{props.saveStatus}</small></div>
       <div className="workbench-tabs" role="tablist" aria-label="Workbench" onKeyDown={e=>{
         if (!["ArrowLeft","ArrowRight","Home","End"].includes(e.key)) return;
         const tabs=Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)'));
@@ -68,7 +71,7 @@ export function WorkspaceView(props: Props) {
       <section className="conversation-column" aria-label="Conversation workspace">
         <div className={`conversation-card ${dragging?"dragging":""}`} onDragEnter={e=>{e.preventDefault();dragDepth.current++;setDragging(true);}} onDragOver={e=>e.preventDefault()} onDragLeave={e=>{e.preventDefault();if(--dragDepth.current<=0)setDragging(false);}} onDrop={e=>{e.preventDefault();dragDepth.current=0;setDragging(false);const file=e.dataTransfer.files[0];if(file)props.onUpload(file);}}>
           {dragging && <div className="drop-overlay"><Upload size={28}/><strong>Drop your spreadsheet here</strong><span>Excel or CSV · up to 2 MB</span></div>}
-          <div className={`conversation-body ${messages.length?"has-messages":"empty-thread"}`} ref={body} onScroll={e=>{const el=e.currentTarget;const latest=el.scrollHeight-el.scrollTop-el.clientHeight<80;follow.current=latest;setAtLatest(latest);}}>
+          <div className={`conversation-body ${messages.length?"has-messages":"empty-thread"}`} ref={body} onScroll={e=>{const el=e.currentTarget;const latest=el.scrollHeight-el.scrollTop-el.clientHeight<80;follow.current=latest;setAtLatest(latest);props.threadPosition.current={top:el.scrollTop,follow:latest};}}>
             {!messages.length ? <div className="chat-welcome"><Sparkles size={28}/><h2>What would you like to work on?</h2><p>Bring a spreadsheet. Ask a question. Build a way of working.</p><div className="starter-actions"><button disabled={busy} onClick={props.onPickFile}><FileSpreadsheet size={17}/> Upload a spreadsheet</button><button disabled={busy} onClick={props.onRunSample}><Play size={17}/> Try a sample report</button><button onClick={()=>{setDraft("Help me build a workflow from my spreadsheet.");document.getElementById("message")?.focus();}}>Build a workflow <ArrowUpRight size={15}/></button></div></div>
               : <div className="message-list" aria-live="polite">{messages.map(message=><div className={`message ${message.role}`} key={message.id}>{message.role==="assistant" && <span className="message-avatar"><Sparkles size={15}/></span>}<div>{message.plan && props.sheet ? <SheetAnswer sheet={props.sheet} plan={message.plan} text={message.text} onSources={inspect}/> : message.text}</div></div>)}{replying && <div className="message assistant"><span className="message-avatar"><Sparkles size={15}/></span><div className="typing" aria-label="Naxium is replying"><i/><i/><i/></div></div>}</div>}
             {busy && <div className="progress-card" role="status"><span className="spinner"/><div><strong>{STAGES[stage][0]}</strong><small>{STAGES[stage][1]}</small></div><button className="icon-button" aria-label="Cancel report" onClick={props.onCancel}><X size={16}/></button></div>}

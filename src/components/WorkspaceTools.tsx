@@ -1,4 +1,5 @@
 "use client";
+import type {WorkReference} from "@/lib/work-navigation";
 import { createPortal } from "react-dom";
 import { WorkflowBuilder } from "@/components/WorkflowBuilder";
 import { useEffect, useRef, useState } from "react";
@@ -15,6 +16,7 @@ type Saved = {
   id: string;
   name: string;
   expires_at: string;
+  updated_at?: string;
   snapshot?: Snapshot;
   revision?: string;
 };
@@ -70,12 +72,15 @@ export function WorkspaceTools({
   onNotice,
   onDirty,
   onResults,
-  salesDraft, onCloseSalesDraft, toolsMount, workflowMount, onStatus,
+  workflowRequest, salesDraft, onCloseSalesDraft, toolsMount, workflowMount, onStatus, onSavedList, onActive, requestedWork, onOpenSource, onContinueChat, onPickInput,
 }: {
+  workflowRequest:{name:string;token:number}|null;
   caps: Capabilities;
   snapshot: Snapshot | null;
   sessionKey: number;
-  onRestore: (s: Snapshot) => void;
+  onRestore: (s: Snapshot, work:WorkReference) => void;
+  onSavedList:(work:WorkReference[])=>void; onActive:(work:WorkReference|null)=>void; requestedWork:{id:string;token:number;messages?:Message[]}|null;
+  onOpenSource:(id:string)=>void; onContinueChat:()=>void; onPickInput:()=>void;
   onReview: (id: number, d: Decision) => void;
   onNotice: (s: string) => void;
   onDirty: (dirty: boolean) => void;
@@ -88,8 +93,7 @@ export function WorkspaceTools({
   useEffect(()=> {setFlowContainer(document.createElement("div"));setToolsContainer(document.createElement("div"));},[]);
   useEffect(()=> {if(workflowMount && flowContainer) {workflowMount.appendChild(flowContainer);return ()=>flowContainer.remove();}},[workflowMount,flowContainer]);
   useEffect(()=> {if(toolsMount && toolsContainer) {toolsMount.appendChild(toolsContainer);return ()=>toolsContainer.remove();}},[toolsMount,toolsContainer]);
-  const [savedMount,setSavedMount] = useState<HTMLElement|null>(null);
-  useEffect(()=>setSavedMount(document.getElementById("saved-work-library")),[]);
+
   const sessionVersion = useRef(sessionKey);
   sessionVersion.current = sessionKey;
   const [saved, setSaved] = useState<Saved[]>([]),
@@ -97,6 +101,8 @@ export function WorkspaceTools({
     [name, setName] = useState(""),
     [working, setWorking] = useState(false),
     [theme, setTheme] = useState("light");
+  useEffect(()=>onSavedList(saved.map(({id,name,updated_at,expires_at})=>({id,name,updated_at,expires_at}))),[saved,onSavedList]);
+  useEffect(()=> {if(requestedWork) void perform(()=>open(requestedWork.id));},[requestedWork]); // eslint-disable-line react-hooks/exhaustive-deps
   const [savedName,setSavedName] = useState("");
   const [baseline, setBaseline] = useState("");
   const [revision, setRevision] = useState<string | undefined>();
@@ -199,6 +205,7 @@ export function WorkspaceTools({
           id: !copy && active || crypto.randomUUID(),
           revision: crypto.randomUUID(),
           name: title,
+          updated_at: new Date().toISOString(),
           expires_at: new Date(Date.now() + 30 * 86400000).toISOString(),
           snapshot: valid,
         };
@@ -210,6 +217,7 @@ export function WorkspaceTools({
       await localDB("readwrite", (s) => s.put(data));
     }
     if (savingSession !== sessionVersion.current) { await load(); return; }
+    onActive({id:data.id,name:title});
     setActive(data.id);
     setName(title);
     setBaseline(fingerprint); setRevision(data.revision); setSavedName(title);
@@ -223,17 +231,19 @@ export function WorkspaceTools({
     const timer = setTimeout(() => void perform(async () => { try { await save(false, true); } catch(e) { setAutosave(false); throw e; } }), 2000);
     return () => clearTimeout(timer);
   }, [autosave, active, dirty, working, fingerprint, name]); // eslint-disable-line react-hooks/exhaustive-deps
+  const openVersion=useRef(0);
   async function open(id: string) {
-    if (dirty && !window.confirm("You have unsaved changes. Open another workspace and discard them?")) return;
+    const openingVersion=++openVersion.current;
+    if (dirty && !window.confirm("You have unsaved changes. Open another workspace and discard them?")) {onActive(active?{id:active,name}:null);return;}
     const openingSession = sessionVersion.current;
     const data = cloud
       ? (await api<{ workspace: Saved }>("/api/workspaces/" + id)).workspace
       : await localDB<Saved>("readonly", (s) => s.get(id));
-    if (openingSession !== sessionVersion.current) return;
+    if (openingSession !== sessionVersion.current || openingVersion !== openVersion.current) return;
     if (!data?.snapshot) throw new Error("Workspace no longer available.");
     const restored = validateSnapshot(data.snapshot);
     setBaseline(JSON.stringify(restored)); setRevision(data.revision); setSavedName(data.name); setAutosave(false);
-    onRestore(restored);
+    onRestore(restored,{id:data.id,name:data.name});
     setActive(id);
     setName(data.name);
     if (toolsRef.current) toolsRef.current.open = false;
@@ -248,6 +258,7 @@ export function WorkspaceTools({
     if (active === id) {
       setActive("");
       setName("");
+      onActive(null);
     }
     await load();
     await refreshRoutines();
@@ -294,12 +305,7 @@ export function WorkspaceTools({
   }
   return (
     <>
-    {savedMount && saved.length > 0 && createPortal(<nav aria-label="Saved workspaces" className="saved-work-shortcuts">
-      <strong>Saved work</strong>
-      {saved.map(w => <button key={w.id} className="secondary-button" disabled={working} aria-current={active === w.id ? "page" : undefined} onClick={() => void perform(() => open(w.id))}>{w.name}</button>)}
-      {working && <span role="status">Loading…</span>}
-    </nav>,savedMount)}
-    {flowContainer && createPortal(<WorkflowBuilder salesDraft={salesDraft} onCloseSalesDraft={onCloseSalesDraft} snapshot={snapshot} workspaceId={active} cloud={cloud} onResults={onResults} onNotice={onNotice} />,flowContainer)}
+    {flowContainer && createPortal(<WorkflowBuilder workflowRequest={workflowRequest} onLibraryChange={()=>void load().catch(()=>{})} onOpenSource={onOpenSource} onContinueChat={onContinueChat} onPickInput={onPickInput} salesDraft={salesDraft} onCloseSalesDraft={onCloseSalesDraft} snapshot={snapshot} workspaceId={active} cloud={cloud} onResults={onResults} onNotice={onNotice} />,flowContainer)}
     {toolsContainer && createPortal(<details ref={toolsRef} className="workspace-tools">
       <summary>Saved work, exports & routines</summary>
       <p role="status">{working ? "Working…" : dirty ? "Unsaved changes" : active ? "All changes saved" : "No workspace open"}{active && name ? ` · ${name}` : ""}</p>

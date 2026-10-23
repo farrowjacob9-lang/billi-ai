@@ -99,3 +99,38 @@
 .chat-workspace .source-badge { color: var(--muted); font-size: 11px; margin: 8px 0; }
 .chat-app .recent-empty { color: #a4aeaa; }
 @media(max-width:1100px) { .with-workbench .conversation-column { visibility: hidden; } }
+
+/* The same navigation and restrained surfaces surround every work destination. */
+.work-search { width:100%; border:1px solid #48504f; background:#ffffff09; color:#f1f2f0; padding:9px 10px; border-radius:7px; margin-bottom:10px; font-size:12px; }
+.work-search::placeholder { color:#a4aeaa; }
+.work-library-list { min-height:0; overflow:auto; flex:1; padding-bottom:12px; }
+.work-library-list button { display:flex; align-items:center; gap:9px; background:transparent; color:#d5dad6; padding:10px; border-radius:7px; text-align:left; font-size:12px; }
+.work-library-list button:hover, .work-library-list button[aria-current] { background:#ffffff12; }
+.work-library-list button span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.work-library-list small { display:block; font-size:10px; color:#9aa6a0; margin-top:4px; }
+.work-library-list .recent-empty { color:#a4aeaa; line-height:1.6; padding:10px; font-size:12px; }
+.connected-library { max-width:980px; margin:0 auto; }
+.connected-library > header { margin:8px 0 28px; }
+.connected-library > header h1 { font-size:28px; letter-spacing:-.7px; }
+.connected-library > header p { color:var(--muted); margin-top:10px; line-height:1.6; }
+.connected-library .workflow-panel { margin:0 0 24px; padding:24px; }
+.connected-library .workflow-panel > h2 { display:none; }
+.connected-library .workflow-panel > p { margin-bottom:16px; }
+.connected-library .workflow-panel > label { display:block; margin:22px 0 14px; }
+.connected-library .workflow-panel select { width:100%; margin-top:8px; }
+.connected-library .workflow-panel details { margin:18px 0; padding:14px 0; border-top:1px solid var(--border); }
+.connected-library .workflow-panel pre { overflow:auto; max-height:360px; white-space:pre-wrap; overflow-wrap:anywhere; }
+.legacy-workflows { border-top:1px solid var(--border); padding-top:20px; }
+.legacy-workflows > summary { cursor:pointer; color:var(--muted); font-size:13px; }
+.legacy-workflows .page-heading { margin:24px 0; }
+.legacy-workflows .page-heading h1 { font-size:22px; }
+.activity-runs { background:var(--surface); border:1px solid var(--border); border-radius:12px; margin-top:24px; padding:24px; }
+.activity-runs > .tools-row { display:flex; justify-content:space-between; gap:12px; margin-bottom:18px; }
+.activity-runs article { padding:18px 0; border-top:1px solid var(--border); }
+.activity-runs article p { color:var(--muted); margin:8px 0; }
+.activity-runs pre { white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; line-height:1.6; margin:14px 0; }
+@media(max-width:760px) {
+ .connected-library .workflow-panel, .activity-runs { padding:16px; }
+ .connected-library .tools-row { flex-direction:column; }
+ .connected-library .page-heading { flex-direction:column; align-items:stretch; }
+}

@@ -72,15 +72,16 @@ test("a business's reports and routines persist on the server and stay private t
   await second.getByLabel("Email").fill(a);
   await second.getByLabel("Password").fill(PASSWORD);
   await second.getByRole("button", { name: "Sign in" }).click();
-  await second.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();
+  await second.getByRole("navigation").getByRole("button", { name: /Activity/ }).click();
   await expect(second.getByRole("button", { name: /sample-week\.csv/ }).last()).toBeVisible();
   await other.close();
 
   await signOut(page);
   await signUp(page, b, "Other Co");
-  await page.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();
+  await page.getByRole("navigation").getByRole("button", { name: /Activity/ }).click();
   await expect(page.getByRole("heading", { name: "Your work has a place here." })).toBeVisible();
-  await page.getByRole("navigation").getByRole("button", { name: /Report routines/ }).click();
+  await page.getByRole("navigation").getByRole("button", { name: "Workflows", exact:true }).click();
+  await page.getByText(/^Weekly report workflows \(/).click();
   await expect(page.getByRole("heading", { name: "Make the next time easier." })).toBeVisible();
   const status = await page.evaluate(async id => (await fetch(`/api/routines/${id}`, { method: "DELETE" })).status, routineId);
   expect(status).toBe(404);
@@ -90,7 +91,7 @@ test("an ended session returns to the sign-in screen, and single reports can be 
   await signUp(page, unique(), "Expiry Co");
   await page.getByRole("button", { name: "Try a sample report" }).click();
   await expect(page.getByRole("button", { name: "Download report" })).toBeVisible();
-  await page.getByRole("navigation").getByRole("button", { name: /Run history/ }).click();
+  await page.getByRole("navigation").getByRole("button", { name: /Activity/ }).click();
   await page.getByRole("button", { name: /^Delete report sample-week\.csv/ }).click();
   await expect(page.getByText("Report deleted.")).toBeVisible();
   expect(await page.evaluate(async () => (await (await fetch("/api/runs")).json()).runs.length)).toBe(0);

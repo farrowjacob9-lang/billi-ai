@@ -1,6 +1,22 @@
 # Connected Naxium product experience
 
-23 October 2026. Product-wide design following the first chat/workbench implementation. This describes the next implementation direction; it is not implemented behaviour.
+23 October 2026. Product-wide design following the first chat/workbench implementation. The design below separates the implemented connection layer from the longer-term product direction. See the implementation checkpoint first.
+
+## Implementation checkpoint
+
+Implemented on `spreadsheet-questions`:
+
+- One searchable sidebar list for saved work and reports, with Your work, Workflows and Activity destinations.
+- Identifier-only hash links restore a saved workspace or report after reload. Browser Back returns between destinations. Unsaved new uploads still require an explicit save to survive reload.
+- Active saved-work title in the conversation header. Unsent composer drafts and reading position survive navigation to libraries during the session.
+- One workflow builder stays mounted across the library and chat panel, preserving drafts and selection. Continue in chat, Upload new input and Open source in chat use the same application actions.
+- `show my workflows`, `show my activity`, and `run workflow <exact saved name>` use the library's navigation/execution paths, including required-column validation. Ambiguous names require a selection; this is a bounded command set.
+- Activity displays cloud workflow jobs and their recorded result/error. Continue in chat opens the current source workspace and explicitly distinguishes it from the historical result. Jobs still follow the source workspace's existing retention/deletion lifecycle.
+- Historical reports open with their own conversation during the session. After reload, the app states that the original report conversation was not retained, rather than attaching unrelated messages.
+- Weekly report templates remain in a compatibility section of Workflows. Run with a new CSV now goes directly through the report calculation path.
+- Consistent neutral library surfaces and a plainly named Settings dialog. The business badge no longer pretends to be a switcher.
+
+Not yet implemented: independently retained/versioned workflow memory; arbitrary natural-language actions; immutable input versions for every historical run; durable report conversations; restoring a workbench panel after reload; collaboration, billing and live service connectors. Existing 30-day saved-work retention remains unchanged. No schema migration is required by this connection layer.
 
 ## Principle
 
@@ -8,7 +24,7 @@ Chat and direct controls operate on the same work, files, workflows and outputs.
 
 The interface should answer: What am I working on? What input is selected? What is Naxium doing? What changed? What can I do next? Can I return to this later?
 
-## Repository findings
+## Repository findings before this implementation
 
 - `App.tsx` uses local view/panel state; pages have no durable navigation identity for a particular conversation/run. Browser Back and reload cannot reconstruct every place the user was working.
 - `Sidebar.tsx` separately lists saved work, recent reports, report routines and workflows. These represent overlapping ways to return to work.
