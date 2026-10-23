@@ -61,7 +61,7 @@ test('saved work deep links, browser Back and the library preserve conversation 
  await composer.fill('Keep this unsent draft');
  await page.locator('.sidebar nav').getByRole('button',{name:'Workflows',exact:true}).click();
  await expect(page).toHaveURL(/#\/workflows$/);
- await page.screenshot({path:'/workspace/artifacts/naxium-connected-workflows.png'});
+ await page.screenshot({path:test.info().outputPath('naxium-connected-workflows.png')});
  await page.goBack();
  await expect(composer).toHaveValue('Keep this unsent draft');
  await expect(page).toHaveURL(workUrl);
