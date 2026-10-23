@@ -6,16 +6,13 @@ test('conversation fills the viewport and the workbench closes without losing th
  const box=await composer.boundingBox();expect(box!.y+box!.height).toBeLessThan(1080);
  await expect(page.getByRole('region',{name:'Workflow builder'})).not.toBeVisible();
  await page.getByLabel('Upload spreadsheet').setInputFiles({name:'crm.csv',mimeType:'text/csv',buffer:Buffer.from('Category,Amount\nSales,100\nFees,-5')});
- await expect(page.getByRole('region',{name:'Spreadsheet preview'})).toBeVisible();
- await page.getByRole('button',{name:'Back to conversation'}).click();
  await expect(page.getByRole('region',{name:'Spreadsheet preview'})).not.toBeVisible();
- await expect(composer).toBeFocused();
+ await composer.focus();
  await composer.fill('Total Amount');await page.getByRole('button',{name:'Send message'}).click();
  const chat=page.getByRole('region',{name:'Conversation workspace'});
  await expect(chat.getByText(/All rows: 95/)).toBeVisible();
  await chat.getByRole('button',{name:'Inspect 2 source rows'}).click();
- await expect(page.getByRole('region',{name:'Spreadsheet preview'})).toBeVisible();
- await page.getByRole('button',{name:'Back to conversation'}).click();
+ await expect(chat.getByRole('region',{name:'Rows used in this answer'})).toBeVisible();
  await page.getByRole('tab',{name:'Data',exact:true}).focus();
  await page.keyboard.press('End');
  await expect(page.getByRole('tab',{name:'Results',exact:true})).toBeFocused();

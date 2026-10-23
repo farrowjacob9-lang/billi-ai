@@ -1,3 +1,11 @@
+## Calculation trust view — 24 October 2026
+
+Uploaded spreadsheets now leave chat central with the Data panel closed. Answers expose See working: plain-English operation/filter rules, included/excluded counts, arithmetic for small inputs, grouped calculations and average total/count summaries. Inspect source rows expands the actual matched rows inline (first 50, with full browsing available for larger inputs), focuses and scrolls the section into view. It no longer silently changes the right panel for ordinary inspection.
+
+Validation: production build passes; 42 unit/schema tests pass (21 real-Postgres tests skipped without a database); 34 of 35 full-browser checks passed initially, then all 8 learning checks passed after correcting the replacement-upload test wait. No application changes were needed for that test failure.
+
+The user supplied a Neon screenshot showing the full migration 006 transaction ending in COMMIT / statement executed successfully. The later signed-in screenshot shows business-account approach storage text. No independent authenticated production persistence smoke test has been performed from this environment.
+
 # Current checkpoint — 23 Oct 2026
 
 Branch: `spreadsheet-questions`. Draft PR: https://github.com/farrowjacob9-lang/billi-ai/pull/2 (includes the earlier account foundation). Implementation history is on this branch; see the workflow-first checkpoint below for the latest scope.
@@ -8,7 +16,7 @@ Preview: https://billi-ai-git-spreadsheet-questions-naxium-langs-projects.vercel
 
 The next-stage review is documented in [LEARNING-REVIEW.md](LEARNING-REVIEW.md). Spreadsheet answers now support natural corrections, visible one-off versus matching acceptance, automatic reuse of an accepted approach on matching requests/fresh data, version inspection/restore/forget and input-fingerprint evidence. Reused methods do not ask for another approval. Explicit “this time” corrections default to one-off acceptance. Recognition remains conservative: normalized request wording and the same headings, not general semantic matching.
 
-New migration `006_learned_methods.sql` stores approaches independently of source workspaces under an explicit 30-day lifetime, with tenant isolation, optimistic versions, bounded history and execution metadata. Ready-to-run Neon transaction: `db/manual/006_learned_methods_neon.sql`. Production migration has not been applied from this environment. Until it is applied, signed-in preview users get explicitly labeled tab-only approaches; local prototype mode persists them in browser storage. Full-cell snapshots still require Save workspace. Legacy manual workflow controls are under Advanced.
+New migration `006_learned_methods.sql` stores approaches independently of source workspaces under an explicit 30-day lifetime, with tenant isolation, optimistic versions, bounded history and execution metadata. Ready-to-run Neon transaction: `db/manual/006_learned_methods_neon.sql`. User screenshot confirms production migration 006 completed successfully; it was not applied from this environment. If readiness is unavailable, signed-in preview users get explicitly labeled tab-only approaches; local prototype mode persists them in browser storage. Full-cell snapshots still require Save workspace. Legacy manual workflow controls are under Advanced.
 
 Verification: production build/typecheck and the 25-case offline execution evaluation passed; all 62 unit/database tests passed against disposable Postgres with no skips; all 45 browser cases passed, including 12 authenticated account journeys. Fake model/email providers were used, not production customer data.
 

@@ -42,6 +42,7 @@ test("sample report, checks, download, routine and history work across refresh",
 test("real uploaded data drives calculations, errors stop invalid reports", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Upload spreadsheet").setInputFiles({ name: "my-week.csv", mimeType: "text/csv", buffer: Buffer.from("date,description,category,amount\n2026-10-05,Consulting,Sales,1250.50\n2026-10-06,Travel,Operations,-50.25") });
+  await page.getByRole("tab",{name:"Data",exact:true}).click();
   await page.getByText("Weekly report", {exact:true}).click();
   page.once("dialog", dialog => dialog.accept());
   await page.getByRole("button", { name: "Prepare weekly report", exact: true }).click();
@@ -78,7 +79,8 @@ test("one report can be deleted from run history, leaving the rest", async ({ pa
   await page.goto("/");
   for (const name of ["first.csv", "second.csv"]) {
     await page.getByLabel("Upload spreadsheet").setInputFiles({ name, mimeType: "text/csv", buffer: Buffer.from("date,description,category,amount\n2026-10-05,Consulting,Sales,100.00") });
-    await page.getByText("Weekly report", {exact:true}).click();
+    await page.getByRole("tab",{name:"Data",exact:true}).click();
+  await page.getByText("Weekly report", {exact:true}).click();
   page.once("dialog", dialog => dialog.accept());
   await page.getByRole("button", { name: "Prepare weekly report", exact: true }).click();
     await expect(page.getByRole("button", { name: "Download report" })).toBeVisible();

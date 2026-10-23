@@ -177,3 +177,9 @@ No request in this synthesis authorizes contacting customers, changing productio
 ## Suggested next-session opening instruction
 
 “Read docs/NEXT-UP.md and the latest STATE checkpoint. Design one concrete end-to-end example where an owner asks for useful work, makes a natural correction, accepts the result, and receives the established behavior on the next matching request without asking to save a workflow. Distinguish one-off choices from reusable rules. Show the interaction and minimal architecture before expanding implementation scope. The previous sales spreadsheet example is a test vehicle, not a committed CRM product.”
+
+## Owner clarification: references behind chat answers (24 October)
+
+"See working" also means grounding business answers in saved business evidence. Example: "Quote 1276, Dave's Electrical" should resolve the appropriate saved record or previous conversation, answer from that evidence and link directly to it. This is separate from learned task approaches, which currently store method definitions, not a searchable archive of quotes or cross-conversation facts.
+
+Next reference slice: tenant-scoped retrieval over explicitly saved, unexpired work and conversations; prefer exact identifiers and entity names; show dated, navigable citations to the source message/row; clarify ambiguous matches and say when nothing is found. Treat prior messages and spreadsheet cells as evidence, never system instructions. Distinguish recorded facts, owner-established rules and inferred conclusions. Expiry/deletion must remove retrieval access; retention and permissions must remain visible. Do not claim this retrieval feature exists yet.

@@ -240,7 +240,7 @@ const LEARNING_CSV="Amount,Status,Category\n100,Posted,Sales\n900,Pending,Sales\
 const resultControls=(page:Page)=>page.getByRole("region",{name:"Conversation workspace"}).getByRole("region",{name:"Refine this result"}).last();
 async function methodInput(page:Page,data=LEARNING_CSV) {
  await page.getByLabel("Upload spreadsheet").setInputFiles({name:"input.csv",mimeType:"text/csv",buffer:Buffer.from(data)});
- await page.getByRole("button",{name:"Back to conversation"}).click();
+ await expect(page.getByRole("region",{name:"Spreadsheet preview"})).not.toBeVisible();
  await page.getByLabel("Message Naxium").fill("Total Amount");await page.getByRole("button",{name:"Send message"}).click();
  await expect(resultControls(page)).toBeVisible();
 }

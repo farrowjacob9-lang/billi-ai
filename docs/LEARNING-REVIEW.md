@@ -39,7 +39,7 @@ Run it once in the Neon SQL Editor, on the same production database where 005 wa
 
 The app detects readiness on refresh/listing. Check **Workspace tools → Service connections → Established approaches**. No new API key or worker is needed for manual reuse. Existing scheduling infrastructure only supplies optional expiry cleanup; acceptance does not create schedules.
 
-This environment has no production database credentials or Neon connector, so production migration application has not been claimed. Until 006 is applied, signed-in users are explicitly offered **this-tab-only** approaches. They work across conversations/uploads in that tab, but refresh or closing the tab forgets them. No cloud data is silently copied into browser local storage. Browser-only mode uses local storage with the disclosed 30-day expiry.
+The user subsequently supplied a Neon screenshot confirming the full migration 006 transaction committed successfully. This environment has no production database credentials or Neon connector; authenticated production persistence still needs the owner’s smoke test. If 006 readiness is unavailable, signed-in users are explicitly offered **this-tab-only** approaches. They work across conversations/uploads in that tab, but refresh or closing the tab forgets them. No cloud data is silently copied into browser local storage. Browser-only mode uses local storage with the disclosed 30-day expiry.
 
 ## Implemented contract
 

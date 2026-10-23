@@ -172,3 +172,16 @@
 @media(max-width:760px) { .correction-form input { font-size:16px; } .methods-library,.connected-library > .methods-library { padding:14px; } }
 .chat-workspace .message-list { min-width:0; width:100%; max-width:100%; }
 .chat-workspace .message.assistant > div { flex:1; min-width:0; }
+
+.answer-working { margin: 16px 0; }
+.answer-working summary, .answer-source-toggle { cursor: pointer; color: var(--ink); font-size: .9rem; }
+.answer-working[open] { padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--paper); }
+.working-scope { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: .85rem; color: var(--muted); }
+.working-equations { display: grid; gap: 12px; margin: 16px 0; font-size: 1.25rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.working-equations > div { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.working-equations strong { font-size: 1.5rem; }
+.answer-working small { display: block; color: var(--muted); font-size: .75rem; }
+.answer-source-toggle { border: 0; padding: 4px 0; background: transparent; text-decoration: underline; text-underline-offset: 4px; }
+.answer-source-rows { min-width: 0; margin-top: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; }
+.answer-source-rows p { font-size: .8rem; color: var(--muted); }
+.answer-source-rows .sheet-scroll { max-height: 360px; }

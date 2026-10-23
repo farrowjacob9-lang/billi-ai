@@ -64,7 +64,7 @@ export function App({ caps }: { caps: Capabilities }) {
   const [headerRow, setHeaderRow] = useState(1);
   const [sheetIndex, setSheetIndex] = useState(0);
   const sheet = sheets[sheetIndex] ?? null;
-  useEffect(() => { if(sheet) setPanel("data"); }, [sheet]);
+  useEffect(() => { setPanel(null); }, [sheet]);
   useEffect(() => { if(report) setPanel("results"); }, [report]);
   useEffect(() => { if(salesDraft) setPanel("workflow"); }, [salesDraft]);
   const activeSheetRef = useRef(sheet);

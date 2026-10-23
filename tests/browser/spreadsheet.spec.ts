@@ -13,6 +13,7 @@ test("real multi-sheet Excel supports totals, category questions, matching rows 
   workbook.addWorksheet("Other").addRows([["Name", "Amount"], ["Example", 200]]);
   await page.goto("/");
   await page.getByLabel("Upload spreadsheet").setInputFiles({ name: "real-expenses.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: Buffer.from(await workbook.xlsx.writeBuffer()) });
+  await page.getByRole("tab",{name:"Data",exact:true}).click();
   await expect(page.getByRole("region", { name: "Spreadsheet preview" })).toBeVisible();
   const composer = page.getByLabel("Message Naxium");
   async function ask(q: string) { await composer.fill(q); await page.getByRole("button", { name: "Send message" }).click(); }
@@ -26,6 +27,7 @@ test("real multi-sheet Excel supports totals, category questions, matching rows 
   expect(sent).toContain("Translate a spreadsheet question");
   expect(sent).not.toContain("Private vendor");
   await page.getByLabel("Active sheet").selectOption("1");
+  await page.getByRole("tab",{name:"Data",exact:true}).click();
   await ask("total Amount");
   await expect(page.getByRole("region", {name:"Conversation workspace"}).getByText(/All rows: 200/)).toBeVisible();
   await expect(page.getByRole("region", {name:"Conversation workspace"}).getByText(/All rows: -80.3/)).toHaveCount(0);
@@ -38,6 +40,7 @@ test("real multi-sheet Excel supports totals, category questions, matching rows 
 test("invalid plans cannot invent a column and formula cells are rejected", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Upload spreadsheet").setInputFiles({ name: "test.csv", mimeType: "text/csv", buffer: Buffer.from("Category,Amount\nTravel,-12.50") });
+  await page.getByRole("tab",{name:"Data",exact:true}).click();
   await expect(page.getByRole("region", { name: "Spreadsheet preview" })).toBeVisible();
   await page.getByLabel("Message Naxium").fill("invent a total");
   await page.getByRole("button", { name: "Send message" }).click();
@@ -60,6 +63,7 @@ test("spreadsheet endpoint enforces AI access and rejects cross-site requests", 
 test("the downloadable tricky workbook opens with formatting, filters and two sheets", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Upload spreadsheet").setInputFiles("tests/tricky-transactions.xlsx");
+  await page.getByRole("tab",{name:"Data",exact:true}).click();
   await expect(page.getByRole("region", { name: "Spreadsheet preview" })).toBeVisible();
   await expect(page.getByLabel("Active sheet").locator("option")).toHaveCount(2);
   await page.getByLabel("Message Naxium").fill("total Amount");
@@ -79,6 +83,7 @@ test("Excel parser refuses malformed uploads and cross-site requests", async ({ 
 test('Naxium saved work survives refresh, keeps review decisions, and exports Excel and PDF',async({page})=>{
  await page.goto('/');
  await page.getByLabel('Upload spreadsheet').setInputFiles('tests/tricky-transactions.xlsx');
+ await page.getByRole('tab',{name:'Data',exact:true}).click();
  await expect(page.getByRole('region',{name:'Spreadsheet preview'})).toBeVisible();
  await page.getByLabel('Message Naxium').fill('total Amount');await page.getByRole('button',{name:'Send message'}).click();
  await expect(page.getByRole("region", {name:"Conversation workspace"}).getByText(/All rows: 9,808.97/)).toBeVisible();
@@ -95,6 +100,7 @@ test('Naxium saved work survives refresh, keeps review decisions, and exports Ex
  await page.getByRole('button',{name:'Dark theme',exact:true}).click();await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
  await page.reload();
  await page.getByRole('navigation',{name:'Saved workspaces'}).getByRole('button',{name:'Tricky financial review',exact:true}).click();
+ await page.getByRole('tab',{name:'Data',exact:true}).click();
  await expect(page.getByRole('region',{name:'Spreadsheet preview'})).toBeVisible();
  await expect(page.getByRole("region", {name:"Conversation workspace"}).getByText(/All rows: 9,808.97/).first()).toBeVisible();
  await expect(page.locator('.workspace-tools')).not.toHaveAttribute('open', '');
@@ -114,6 +120,7 @@ test('explorer searches every row, reviews data and suggests questions without c
  const rows = Array.from({length:30}, (_,i) => `Travel,${i+1},note-${i}`);
  rows.push('Travel,1,note-0', 'Other,unknown,');
  await page.getByLabel('Upload spreadsheet').setInputFiles({name:'explorer.csv',mimeType:'text/csv',buffer:Buffer.from('Category,Amount,Note\n'+rows.join('\n'))});
+ await page.getByRole('tab',{name:'Data',exact:true}).click();
  const preview = page.getByRole('region',{name:'Spreadsheet preview'});
  await expect(preview.getByRole('cell',{name:'note-29',exact:true})).toHaveCount(0);
  await preview.getByRole('button',{name:'Next rows'}).click();
@@ -163,7 +170,7 @@ test('approved workflow remembers steps and reuses them on a fresh file with sch
  await expect(conversation.getByText(/All rows: -56/)).toBeVisible();
  await expect(conversation.getByText(/All rows: 3/)).toBeVisible();
  await conversation.getByRole('button',{name:'Inspect 3 source rows'}).first().click();
- await expect(page.getByText('Inspecting answer source rows.')).toBeVisible();
+ await expect(conversation.getByRole('region',{name:'Rows used in this answer'})).toBeVisible();
  await upload('wrong.csv','Other\n1');
  await page.getByRole('tab',{name:'Workflow',exact:true}).click();
  if(await page.locator('#pane-workflow > details').getAttribute('open')===null)await page.getByText('Advanced calculation workflows',{exact:true}).click();
@@ -179,6 +186,7 @@ test('header choice keeps original row references and explicit autosave preserve
  await page.getByText('Import settings',{exact:true}).click();
  await page.getByLabel('Header row').fill('2');
  await page.getByLabel('Upload spreadsheet').setInputFiles({name:'bank.csv',mimeType:'text/csv',buffer:Buffer.from('Bank statement\nCategory,Amount\nTravel,-12\nSoftware,-8')});
+ await page.getByRole('tab',{name:'Data',exact:true}).click();
  const preview=page.getByRole('region',{name:'Spreadsheet preview'});
  await expect(preview.getByRole('rowheader',{name:'3',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Workspace tools',exact:true}).click();
@@ -192,6 +200,7 @@ test('header choice keeps original row references and explicit autosave preserve
  await page.reload();
  await page.getByRole('navigation',{name:'Saved workspaces'}).getByRole('button',{name:'Bank import',exact:true}).click();
  await expect(page.getByRole('region',{name:'Conversation workspace'}).getByText(/All rows: -20/)).toBeVisible();
+ await page.getByRole('tab',{name:'Data',exact:true}).click();
  await expect(page.getByRole('region',{name:'Spreadsheet preview'}).getByRole('rowheader',{name:'3',exact:true})).toBeVisible();
 });
 
@@ -213,6 +222,7 @@ test('clarification and monthly results remain distinguishable and service healt
 test('the exact namespace-prefixed CRM uploads and totals successfully',async({page})=>{
  await page.goto('/');
  await page.getByLabel('Upload spreadsheet').setInputFiles('tests/fixtures/naxium-sales-crm-prefixed.xlsx');
+ await page.getByRole('tab',{name:'Data',exact:true}).click();
  await expect(page.getByRole('region',{name:'Spreadsheet preview'})).toBeVisible();
  await page.getByLabel('Message Naxium').fill('Total Deal value');
  await page.getByRole('button',{name:'Send message'}).click();
