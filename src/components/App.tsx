@@ -99,6 +99,7 @@ export function App({ caps }: { caps: Capabilities }) {
   const [methodBusy,setMethodBusy]=useState(false);
   const [methodFocus,setMethodFocus]=useState<{id:string;token:number}|null>(null);
   const memoryStore=useMemo(()=>new MemoryStore(caps.mode==="cloud"),[caps.mode,caps.user?.email]);
+  const [memoryPdf,setMemoryPdf]=useState<File|undefined>();
   const [memoryOpen,setMemoryOpen]=useState(false);
   const [memorySeed,setMemorySeed]=useState<MemoryInput|undefined>();
   const [memoryFocus,setMemoryFocus]=useState<string|undefined>();
@@ -189,6 +190,7 @@ export function App({ caps }: { caps: Capabilities }) {
 
   const reportInput=useRef(false);
   async function upload(file: File) {
+    if(/\.pdf$/i.test(file.name)){if(busy)return;reportInput.current=false;setMemoryPdf(file);setMemorySeed(undefined);setMemoryFocus(undefined);setMemoryOpen(true);return;}
     if(reportInput.current) {reportInput.current=false;if(!file.name.toLowerCase().endsWith(".csv")){setToast("Weekly report workflows require a CSV with date, description, category and amount columns.");return;}await runCsv(await file.text(),file.name);return;}
     if (busy) return;
     if (unsaved && !window.confirm("Replace the current spreadsheet? Save it first if you want to keep your changes.")) return;
@@ -248,11 +250,11 @@ export function App({ caps }: { caps: Capabilities }) {
     }catch(e){return (e as Error).message;}finally{methodAction.current=false;setMethodBusy(false);}
   }
 
-  function openMemory(){setMemorySeed(undefined);setMemoryFocus(undefined);setMemoryOpen(true);}
-  function rememberAnswer(message:Message){setMemoryFocus(undefined);setMemorySeed({title:(message.task?.question??"Business reference").slice(0,120),body:message.text.slice(0,20000),...(workIdentity?{sourceWorkspaceId:workIdentity.id,sourceMessageId:message.id}:{})});setMemoryOpen(true);}
+  function openMemory(){setMemoryPdf(undefined);setMemorySeed(undefined);setMemoryFocus(undefined);setMemoryOpen(true);}
+  function rememberAnswer(message:Message){setMemoryPdf(undefined);setMemoryFocus(undefined);setMemorySeed({title:(message.task?.question??"Business reference").slice(0,120),body:message.text.slice(0,20000),...(workIdentity?{sourceWorkspaceId:workIdentity.id,sourceMessageId:message.id}:{})});setMemoryOpen(true);}
   function openReference(reference:MemoryReference){
     if(reference.kind==="workspace"){openWork(reference.id);setToast(reference.row?`Source: sheet ${1+(reference.sheetIndex??0)}, row ${reference.row}.`:'Opening the saved conversation.');return;}
-    setMemorySeed(undefined);setMemoryFocus(reference.id);setMemoryOpen(true);
+    setMemoryPdf(undefined);setMemorySeed(undefined);setMemoryFocus(reference.id);setMemoryOpen(true);
   }
   async function memoryReply(text:string):Promise<boolean>{
     if(/\b(weather|news|latest news)\b/i.test(text) || (sheet && simplePlan(text,sheet)))return false;
@@ -417,8 +419,8 @@ export function App({ caps }: { caps: Capabilities }) {
       </div>
     </main>
 
-    <input className="sr-only" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-label="Upload spreadsheet" ref={fileInput} onChange={e => { const file = e.target.files?.[0]; if (file) void upload(file); e.target.value = ""; }} />
-    {memoryOpen && <MemoryLibrary store={memoryStore} seed={memorySeed} focus={memoryFocus} onClose={()=>setMemoryOpen(false)} onUse={record=>{setMemoryContext(record);setMemoryOpen(false);navigate("workspace");setComposerDraft("Help me adapt this reference for ");requestAnimationFrame(()=>document.getElementById("message")?.focus());}} onOpenWork={id=>{setMemoryOpen(false);openWork(id);}}/>}
+    <input className="sr-only" type="file" accept=".pdf,.csv,.xlsx,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-label="Upload spreadsheet or PDF" ref={fileInput} onChange={e => { const file = e.target.files?.[0]; if (file) void upload(file); e.target.value = ""; }} />
+    {memoryOpen && <MemoryLibrary initialFile={memoryPdf} store={memoryStore} seed={memorySeed} focus={memoryFocus} onClose={()=>setMemoryOpen(false)} onUse={record=>{setMemoryContext(record);setMemoryOpen(false);navigate("workspace");setComposerDraft("Help me adapt this reference for ");requestAnimationFrame(()=>document.getElementById("message")?.focus());}} onOpenWork={id=>{setMemoryOpen(false);openWork(id);}}/>}
     <AppDialog modal={modal} settings={copy.settings} businessName={copy.workspaceName} onClose={() => setModal(null)} onOpen={setModal} onSaveRoutine={saveRoutine} onManageHistory={() => { setModal(null); navigate("history"); }} onSignOut={caps.user ? () => void signOut() : undefined} account={account} />
     {toast && <Toast text={toast} onDismiss={() => setToast("")} />}
   </div>;

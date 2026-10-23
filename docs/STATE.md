@@ -1,3 +1,9 @@
+## PDF quote upload — 24 October 2026
+
+PDF quotes can now be attached from chat, dragged in, or uploaded in Company memory. Server-only unpdf/PDF.js extraction opens a reviewable record draft with filename/page provenance. Only Keep in company memory persists the text; the original PDF binary is not retained and extraction does not send it to an AI provider. Existing chat/spreadsheet work is preserved while the memory dialog opens. No new migration is needed beyond 007, which the owner subsequently showed committed successfully in Neon.
+
+Limits: 2 MB, 20 pages, 20,000-character memory body. Invalid/encrypted/oversized/overlong files get specific errors; scanned/image-only PDFs explicitly require OCR, not implemented in this slice. Empty-text pages are flagged for review. Actual PDF parsing and the full upload→review→keep→refresh→retrieve flow are tested, including both upload entry points and no silent saving. Production build passes; 38 browser checks pass; 47 unit/schema tests pass with 23 real-database cases skipped in this turn (the earlier company-memory slice exercised those against real Postgres). A fictional PDF is served at /samples/company-memory-quote-1276.pdf.
+
 ## Company memory and general search — 24 October 2026
 
 Implemented explicit permanent company-memory records, cross-conversation lexical retrieval over those records and unexpired saved rows/messages, dated source cards, inspect/edit/export/delete, optimistic revisions, and a selected-reference AI review-draft flow. Records survive original-workspace deletion and are removed with the business. A Company memory library is available from the sidebar and chat toolbar; answers can be explicitly kept from chat. Retention and provider-sharing disclosures updated. No silent capture or cloud-to-local fallback. See docs/COMPANY-MEMORY.md for exact scope and owner test.

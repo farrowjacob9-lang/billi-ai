@@ -4,7 +4,7 @@ Company memory holds explicitly kept text records independently of temporary spr
 
 ## Enable account storage
 
-Apply `db/manual/007_company_memory_neon.sql` once in the Neon SQL Editor as owner on the same production database used by migrations 005 and 006. The full transaction records migration 007 and commits. Downloadable copy: `/setup/007-company-memory.sql`. Do not run again if already recorded. No production credentials are available in the development environment; local validation does not apply this migration to production.
+Apply `db/manual/007_company_memory_neon.sql` once in the Neon SQL Editor as owner on the same production database used by migrations 005 and 006. The full transaction records migration 007 and commits. Downloadable copy: `/setup/007-company-memory.sql`. Do not run again if already recorded. The owner subsequently supplied a Neon screenshot showing the production 007 transaction committed successfully. No production credentials are available in the development environment.
 
 The sidebar Company memory button opens the library. Account mode never silently falls back to browser storage. When 007 is absent, it explicitly reports setup is required and saving is disabled. Browser-only prototype mode uses device local storage and labels that limitation.
 
@@ -36,3 +36,9 @@ Searching saved records does not send them to a model. Selecting Use in chat and
 ## Next review points
 
 Native source navigation to exact messages/rows; duplicate detection; richer typed business records; semantic retrieval with verified IDs; company-controlled retention choices; record revision history; granular permissions; structured quote output and code-checked totals; attachments and connectors; live-provider adversarial testing. Do not call this a general autonomous business knowledge system yet.
+
+## PDF quotes
+
+Upload a PDF through chat (file picker, paperclip or drop) or the Company memory library. Naxium reads the text transiently on the server, displays page labels for review and only saves it when Keep in company memory is chosen. No AI provider receives the PDF for extraction. The original binary PDF is not retained; an imported filename and page-labelled text are retained as part of the chosen record. No new migration beyond 007 is needed.
+
+Limits: 2 MB, 20 pages and the existing 20,000-character memory record limit. Invalid, password-protected, oversized or text-heavy documents return specific errors. Image-only/scanned PDFs require OCR, which this slice does not implement; empty text pages in otherwise readable documents are explicitly flagged. Tables and complex layouts may need correction in the review text. A synthetic PDF is available at /samples/company-memory-quote-1276.pdf.

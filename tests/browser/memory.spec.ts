@@ -26,3 +26,14 @@ test('an attached sheet does not trap general chat and live answers cite web sea
  const requests=JSON.stringify(await (await request.get('http://127.0.0.1:4010/requests')).json());expect(requests).toContain('web_search_20250305');
  expect((await request.post('/api/memory/search',{headers:{origin:'https://foreign.example'},data:{question:'1276'}})).status()).toBe(403);expect((await request.get('/api/memory')).status()).toBe(404);
 });
+
+test('PDF attachment opens reviewable company memory and becomes searchable only after keeping',async({page,request})=>{
+ await page.goto('/');await page.getByLabel('Upload spreadsheet').setInputFiles('public/samples/company-memory-quote-1276.pdf');
+ const dialog=page.getByRole('dialog',{name:'Company memory'});await expect(dialog.getByLabel('Reference material')).toHaveValue(/Quote 1276/);await expect(dialog.getByLabel('Reference material')).toHaveValue(/AUD 880/);
+ await expect(dialog.getByText(/original PDF is not retained/)).toBeVisible();
+ await dialog.getByRole('button',{name:'Close memory'}).click();await page.getByRole('button',{name:'Company memory',exact:true}).first().click();await expect(dialog.getByText('No permanent records yet.')).toBeVisible();await dialog.getByLabel('Upload PDF quote').setInputFiles('public/samples/company-memory-quote-1276.pdf');await expect(dialog.getByLabel('Reference material')).toHaveValue(/AUD 880/);
+ await dialog.getByRole('button',{name:'Keep in company memory',exact:true}).click();await expect(dialog.getByRole('status').filter({hasText:'Kept in company memory'})).toBeVisible();await dialog.getByRole('button',{name:'Close memory'}).click();await page.reload();
+ await page.getByLabel('Message Naxium').fill('Find quote 1276');await page.getByRole('button',{name:'Send message'}).click();await expect(page.getByRole('region',{name:'Sources behind this answer'})).toContainText('1276');
+ expect((await request.post('/api/memory/pdf',{headers:{origin:'https://foreign.example'},data:{}})).status()).toBe(403);
+ expect((await request.post('/api/memory/pdf',{data:{fileName:'bad.pdf',data:Buffer.from('not a pdf').toString('base64')}})).status()).toBe(422);
+});

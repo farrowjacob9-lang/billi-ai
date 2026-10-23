@@ -31,7 +31,8 @@
     "pg": "^8.23.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "saxes": "^5.0.1"
+    "saxes": "^5.0.1",
+    "unpdf": "^1.9.1"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.14",
